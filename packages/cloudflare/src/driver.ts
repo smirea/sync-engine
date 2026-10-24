@@ -1,5 +1,5 @@
 import type { DurableObjectStorage } from '@cloudflare/workers-types';
-import type { SqlDriver, Values } from '@sync-engine/core';
+import type { SqlDriver, Values } from '../../core/src/index.ts';
 
 export type DurableStorage = Pick<DurableObjectStorage, 'sql' | 'transactionSync'>;
 

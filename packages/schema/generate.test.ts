@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { defineSchema } from '@sync-engine/core';
+import { defineSchema } from '../core/src/index.ts';
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { z } from 'zod';
 import { generate } from './src/index.ts';

@@ -1,4 +1,4 @@
-import { createClient, LIVE_PROTOCOL, type Schema, type SqlDriver, type SyncResponse } from '@sync-engine/core';
+import { createClient, LIVE_PROTOCOL, type Schema, type SqlDriver, type SyncResponse } from '../../core/src/index.ts';
 
 export type SyncClientOptions = {
 	driver: SqlDriver;

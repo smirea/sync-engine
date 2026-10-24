@@ -1,7 +1,7 @@
 /**
  * Runs the unit tests related to the files lefthook passes in: every `*.test.ts(x)` whose imports reach a changed
- * file, followed through the import graph. Imports resolve the way Bun resolves them, so tsconfig paths and
- * workspace packages count; anything that lands in node_modules does not.
+ * file, followed through the import graph. Imports resolve the way Bun resolves them, so tsconfig paths count;
+ * anything that lands in node_modules does not.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';

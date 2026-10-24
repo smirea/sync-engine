@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { bunSqlite } from '@sync-engine/bun-sqlite';
+import { bunSqlite } from '../bun-sqlite/src/index.ts';
 import type { ModelState, PulledVector, Rows, SparseRow, VectorWrite, Vectors } from '../../spec/vectors.ts';
 import {
 	createClient,

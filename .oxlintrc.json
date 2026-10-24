@@ -12,7 +12,8 @@
 		"unicorn/no-null": "off",
 		"unicorn/prefer-top-level-await": "off",
 		"unicorn/filename-case": "off",
-		"node/no-process-env": "error"
+		"node/no-process-env": "error",
+		"typescript/triple-slash-reference": ["error", { "path": "always" }]
 	},
 	"overrides": [
 		{

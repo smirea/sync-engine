@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { z } from 'zod';
-import { bunSqlite } from '@sync-engine/bun-sqlite';
+import { bunSqlite } from '../bun-sqlite/src/index.ts';
 import { createClient, createSpace, defineSchema, type Schema, type SqlDriver, type Write } from './src/index.ts';
 
 const notes = sqliteTable('notes', {

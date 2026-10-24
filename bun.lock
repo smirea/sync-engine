@@ -5,6 +5,11 @@
     "": {
       "name": "sync-engine",
       "dependencies": {
+        "drizzle-orm": "^0.45.1",
+        "zod": "^4.1.13",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251011.0",
         "@types/bun": "^1.4.4",
         "es-toolkit": "^1.53.0",
         "kill-port-process": "^5.0.0",
@@ -13,59 +18,14 @@
         "oxfmt": "^0.74.0",
         "oxlint": "^1.89.0",
         "typescript": "^7.0.2",
-      },
-    },
-    "packages/bun-server": {
-      "name": "@sync-engine/bun-server",
-      "dependencies": {
-        "@sync-engine/bun-sqlite": "workspace:*",
-        "@sync-engine/core": "workspace:*",
-      },
-    },
-    "packages/bun-sqlite": {
-      "name": "@sync-engine/bun-sqlite",
-      "dependencies": {
-        "@sync-engine/core": "workspace:*",
-      },
-    },
-    "packages/client": {
-      "name": "@sync-engine/client",
-      "dependencies": {
-        "@sync-engine/core": "workspace:*",
-      },
-    },
-    "packages/cloudflare": {
-      "name": "@sync-engine/cloudflare",
-      "dependencies": {
-        "@sync-engine/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@cloudflare/workers-types": "^4.20251011.0",
-        "@sync-engine/bun-sqlite": "workspace:*",
-        "@sync-engine/client": "workspace:*",
-        "drizzle-orm": "^0.45.1",
         "wrangler": "^4.45.0",
       },
-    },
-    "packages/core": {
-      "name": "@sync-engine/core",
-      "dependencies": {
-        "drizzle-orm": "^0.45.1",
-        "zod": "^4.1.13",
+      "peerDependencies": {
+        "@cloudflare/workers-types": "^4.20251011.0",
       },
-      "devDependencies": {
-        "@sync-engine/bun-sqlite": "workspace:*",
-      },
-    },
-    "packages/schema": {
-      "name": "@sync-engine/schema",
-      "dependencies": {
-        "@sync-engine/core": "workspace:*",
-      },
-      "devDependencies": {
-        "drizzle-orm": "^0.45.1",
-        "zod": "^4.1.13",
-      },
+      "optionalPeers": [
+        "@cloudflare/workers-types",
+      ],
     },
   },
   "packages": {
@@ -286,18 +246,6 @@
     "@sindresorhus/is": ["@sindresorhus/is@7.2.0", "", {}, "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="],
 
     "@speed-highlight/core": ["@speed-highlight/core@1.2.24", "", {}, "sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw=="],
-
-    "@sync-engine/bun-server": ["@sync-engine/bun-server@workspace:packages/bun-server"],
-
-    "@sync-engine/bun-sqlite": ["@sync-engine/bun-sqlite@workspace:packages/bun-sqlite"],
-
-    "@sync-engine/client": ["@sync-engine/client@workspace:packages/client"],
-
-    "@sync-engine/cloudflare": ["@sync-engine/cloudflare@workspace:packages/cloudflare"],
-
-    "@sync-engine/core": ["@sync-engine/core@workspace:packages/core"],
-
-    "@sync-engine/schema": ["@sync-engine/schema@workspace:packages/schema"],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

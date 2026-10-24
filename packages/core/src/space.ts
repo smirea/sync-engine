@@ -83,7 +83,7 @@ export function createSpace(driver: SqlDriver, schema: Schema): Space {
 		return Number(row.value);
 	};
 
-	const current = (table: Table, id: string, deleted: SqlValue): PulledRow[] => {
+	const current = (table: Table, id: string, deleted: SqlValue | undefined): PulledRow[] => {
 		if (deleted) return [{ table: table.name, id, deleted: 1 }];
 		const row = driver.exec(`SELECT ${columnList(table)} FROM ${table.name} WHERE id = ?`, [id])[0];
 		return row ? [{ table: table.name, id, deleted: 0, values: wire(table, row) }] : [];

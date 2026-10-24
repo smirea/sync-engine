@@ -1,5 +1,12 @@
-import { createSpace, handleSync, LIVE_PROTOCOL, type Schema, type SqlDriver, withBearer } from '@sync-engine/core';
-import { bunSqlite } from '@sync-engine/bun-sqlite';
+import {
+	createSpace,
+	handleSync,
+	LIVE_PROTOCOL,
+	type Schema,
+	type SqlDriver,
+	withBearer,
+} from '../../core/src/index.ts';
+import { bunSqlite } from '../../bun-sqlite/src/index.ts';
 
 export type ServeOptions = ({ driver: SqlDriver; file?: never } | { file: string; driver?: never }) & {
 	schema: Schema;

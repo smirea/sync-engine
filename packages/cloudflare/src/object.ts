@@ -1,6 +1,13 @@
+/// <reference path="./cloudflare-workers.d.ts" />
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { DurableObject } from 'cloudflare:workers';
-import { createSpace, handleSync as syncOverHttp, LIVE_PROTOCOL, type Schema, type Space } from '@sync-engine/core';
+import {
+	createSpace,
+	handleSync as syncOverHttp,
+	LIVE_PROTOCOL,
+	type Schema,
+	type Space,
+} from '../../core/src/index.ts';
 import { durableDriver } from './driver.ts';
 
 export class SpaceObject<Env = unknown> extends DurableObject<Env> {

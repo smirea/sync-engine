@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { createSpace, defineSchema } from '@sync-engine/core';
+import { createSpace, defineSchema } from '../core/src/index.ts';
 import { durableDriver } from './src/driver.ts';
 import { handleSync } from './src/worker.ts';
 

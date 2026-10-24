@@ -1,5 +1,5 @@
 {
-	"$schema": "../node_modules/wrangler/config-schema.json",
+	"$schema": "../../../node_modules/wrangler/config-schema.json",
 	"name": "sync-engine-example",
 	"main": "worker.ts",
 	"compatibility_date": "2026-10-01",
