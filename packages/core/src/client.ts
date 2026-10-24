@@ -1,4 +1,5 @@
 import { migrate } from './schema.ts';
+import { rowKey, upsert } from './sql.ts';
 import type { Schema, SqlDriver, SqlValue, SyncResponse, Table, Value, Values, Write } from './types.ts';
 
 export type Client = {
@@ -11,8 +12,6 @@ export type Client = {
 };
 
 type Group = { table: string; id: string; seq: number; ops: string[]; cols: Set<string> };
-
-const key = (table: SqlValue, id: SqlValue) => `${String(table)}\u0000${String(id)}`;
 
 export function createClient(driver: SqlDriver, schema: Schema): Client {
 	const tables = new Map(schema.tables.map(table => [table.name, table]));
@@ -34,7 +33,7 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 		for (const row of driver.exec('SELECT seq, "table", id, op, col FROM _outbox ORDER BY seq')) {
 			const seq = Number(row.seq);
 			acked = seq;
-			const k = key(row.table, row.id);
+			const k = rowKey(String(row.table), String(row.id));
 			const group = groups.get(k) ?? { table: String(row.table), id: String(row.id), seq, ops: [], cols: new Set() };
 			group.seq = seq;
 			group.ops.push(String(row.op));
@@ -59,28 +58,41 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 	function apply(response: SyncResponse, acked: number): Set<string> {
 		return driver.transaction(() => {
 			const touched = new Set<string>();
+			if (acked > 0 && response.acked > acked) {
+				// The server knows this client id past what we sent: a restored backup or a copied database. Under a
+				// fresh id the next sync re-sends the outbox instead of having it skipped as a replay.
+				setMeta('client', crypto.randomUUID());
+				return touched;
+			}
 			setMeta('applying', 1);
+			const pendingRows = driver
+				.exec('SELECT "table", id FROM _outbox WHERE seq > ?', [acked])
+				.map(row => ({ table: String(row.table), id: String(row.id) }));
+			const pending = new Set(pendingRows.map(row => rowKey(row.table, row.id)));
 			if (response.snapshot) {
 				for (const table of schema.tables) {
-					driver.exec(`DELETE FROM ${table.name}`);
+					const keep = pendingRows.filter(row => row.table === table.name).map(row => row.id);
+					driver.exec(
+						`DELETE FROM ${table.name}${keep.length ? ` WHERE id NOT IN (${keep.map(() => '?').join(', ')})` : ''}`,
+						keep,
+					);
 					touched.add(table.name);
 				}
 			}
-			const pending = new Set(
-				driver.exec('SELECT "table", id FROM _outbox WHERE seq > ?', [acked]).map(row => key(row.table, row.id)),
-			);
 			for (const pulled of response.rows) {
 				const table = tables.get(pulled.table);
-				if (!table || pending.has(key(pulled.table, pulled.id))) continue;
+				if (!table || pending.has(rowKey(pulled.table, pulled.id))) continue;
 				touched.add(table.name);
 				if (pulled.deleted) {
 					driver.exec(`DELETE FROM ${table.name} WHERE id = ?`, [pulled.id]);
 					continue;
 				}
 				const columns = table.columns.filter(c => c.name !== 'id');
-				driver.exec(
-					`INSERT OR REPLACE INTO ${table.name} (id${columns.map(c => `, ${c.name}`).join('')}) VALUES (?${', ?'.repeat(columns.length)})`,
-					[pulled.id, ...columns.map(c => pulled.values[c.name] ?? c.default ?? null)],
+				upsert(
+					driver,
+					table.name,
+					pulled.id,
+					Object.fromEntries(columns.map(c => [c.name, pulled.values[c.name] ?? c.default ?? null])),
 				);
 			}
 			driver.exec('DELETE FROM _outbox WHERE seq <= ?', [acked]);

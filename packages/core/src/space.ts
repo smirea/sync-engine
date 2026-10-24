@@ -1,4 +1,5 @@
 import { migrate } from './schema.ts';
+import { rowKey, upsert } from './sql.ts';
 import type {
 	Column,
 	PulledRow,
@@ -6,6 +7,7 @@ import type {
 	Row,
 	Schema,
 	SqlDriver,
+	SqlValue,
 	SyncRequest,
 	SyncResponse,
 	Table,
@@ -81,24 +83,38 @@ export function createSpace(driver: SqlDriver, schema: Schema): Space {
 		return Number(row.value);
 	};
 
-	function pull(cursor: number): PulledRow[] {
-		if (cursor === 0) {
-			return schema.tables.flatMap(table =>
-				driver
-					.exec(`SELECT ${columnList(table)} FROM ${table.name} ORDER BY id`)
-					.map(row => ({ table: table.name, id: String(row.id), deleted: 0, values: wire(table, row) })),
-			);
+	const current = (table: Table, id: string, deleted: SqlValue): PulledRow[] => {
+		if (deleted) return [{ table: table.name, id, deleted: 1 }];
+		const row = driver.exec(`SELECT ${columnList(table)} FROM ${table.name} WHERE id = ?`, [id])[0];
+		return row ? [{ table: table.name, id, deleted: 0, values: wire(table, row) }] : [];
+	};
+
+	function pull(cursor: number, rejected: Rejected[]): PulledRow[] {
+		const rows =
+			cursor === 0
+				? schema.tables.flatMap(table =>
+						driver.exec(`SELECT ${columnList(table)} FROM ${table.name} ORDER BY id`).map((row): PulledRow => ({
+							table: table.name,
+							id: String(row.id),
+							deleted: 0,
+							values: wire(table, row),
+						})),
+					)
+				: driver
+						.exec('SELECT "table", id, deleted FROM _changes WHERE seq > ? ORDER BY seq', [cursor])
+						.flatMap(change => {
+							const table = tables.get(String(change.table));
+							return table ? current(table, String(change.id), change.deleted) : [];
+						});
+		const seen = new Set(rows.map(row => rowKey(row.table, row.id)));
+		for (const { table: name, id } of rejected) {
+			const table = tables.get(name);
+			if (!table || seen.has(rowKey(name, id))) continue;
+			seen.add(rowKey(name, id));
+			const change = driver.exec('SELECT deleted FROM _changes WHERE "table" = ? AND id = ?', [name, id])[0];
+			if (change) rows.push(...current(table, id, change.deleted));
 		}
-		return driver
-			.exec('SELECT "table", id, deleted FROM _changes WHERE seq > ? ORDER BY seq', [cursor])
-			.flatMap((change): PulledRow[] => {
-				const table = tables.get(String(change.table));
-				if (!table) return [];
-				const id = String(change.id);
-				if (change.deleted) return [{ table: table.name, id, deleted: 1 }];
-				const row = driver.exec(`SELECT ${columnList(table)} FROM ${table.name} WHERE id = ?`, [id])[0];
-				return row ? [{ table: table.name, id, deleted: 0, values: wire(table, row) }] : [];
-			});
+		return rows;
 	}
 
 	function sync(request: SyncRequest): SyncResponse {
@@ -136,11 +152,7 @@ export function createSpace(driver: SqlDriver, schema: Schema): Space {
 					case 'put': {
 						const checked = checkValues(table, write);
 						if ('reason' in checked) return checked.reason;
-						const names = Object.keys(checked.values);
-						driver.exec(
-							`INSERT OR REPLACE INTO ${table.name} (id${names.map(n => `, ${n}`).join('')}) VALUES (?${', ?'.repeat(names.length)})`,
-							[write.id, ...names.map(n => checked.values[n]!)],
-						);
+						upsert(driver, table.name, write.id, checked.values);
 						touch(write, 0, checked.values);
 						return null;
 					}
@@ -177,7 +189,7 @@ export function createSpace(driver: SqlDriver, schema: Schema): Space {
 			}
 			if (seq !== start) driver.exec("UPDATE _meta SET value = ? WHERE key = 'head'", [seq]);
 
-			return { head: seq, acked: last, rejected, snapshot: request.cursor === 0, rows: pull(request.cursor) };
+			return { head: seq, acked: last, rejected, snapshot: request.cursor === 0, rows: pull(request.cursor, rejected) };
 		});
 	}
 
