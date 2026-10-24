@@ -27,3 +27,6 @@ Package.resolved
 
 # built from spec/sync.bend by scripts/spec-vectors.ts
 spec/sync.mjs
+
+# wrangler dev state
+.wrangler
