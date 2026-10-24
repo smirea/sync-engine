@@ -1,0 +1,11 @@
+# Sync
+
+Decisions from the 2026-10-24 investigation ([`docs/investigation/README.md`](../investigation/README.md)). Each stands until the implementation proves it wrong.
+
+- **Rows on the wire, not actions.** Clients compute row writes (put, patch, delete) from their store rules and sync those. The server applies rows with no app logic. An action log was rejected because it needs identical reducers in TypeScript and Swift, action shapes that can never be removed, and a full replay on schema changes. An append-only `_log` of applied row writes next to the mirror covers activity feeds and debugging.
+- **One Durable Object with SQLite storage per space.** The object holds the app tables (the mirror), `_changes` (latest sequence per row), `_clients` (last acked sequence per client) and `_log`. Writes are serialized by the object, so there are no locks. An object is created on first use, so environments need no provisioning. Single-owner apps have one space; procrastimate has one per user and clients subscribe to the spaces they can see.
+- **Conflicts: column-level last write to arrive.** Delete beats a later patch, a patch to a missing row is a no-op, a rejected write is dropped and the next pull restores the server's row. Both apps accept these rules today under PowerSync.
+- **One round trip, Replicache-shaped.** `POST /sync {clientId, cursor, writes}` replays writes exactly once by per-client sequence number and returns the rows changed since the cursor. A cursor behind the compaction horizon gets a snapshot. A hibernating WebSocket carries only `{cursor}` nudges.
+- **The engine core runs anywhere SQLite runs.** It targets a small SQL driver interface. Durable Object storage is production, bun:sqlite runs tests and local tools, and D1 or libsql adapters are possible without touching the core.
+- **Same DDL on client and server.** One Drizzle `sqlite-core` schema per app generates the DDL and migrations, Zod validators, Swift structs with GRDB conformance, and a schema hash. Additive changes apply as `ALTER` on both sides; shape changes make the client push its outbox, drop its database and pull a snapshot.
+- **Web storage is sqlite-wasm with OPFS in a SharedWorker.** One connection serves every tab. This is the one client piece PowerSync provided that we must write ourselves.
