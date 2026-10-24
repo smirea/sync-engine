@@ -54,7 +54,11 @@ function checkValue(column: Column, value: Value): string | null {
 function checkValues(table: Table, write: Extract<Write, { values: Values }>): Checked {
 	const values: Values = {};
 	for (const column of table.columns) {
-		if (column.name === 'id') continue;
+		if (column.name === 'id') {
+			const reason = checkValue(column, write.id);
+			if (reason) return { reason };
+			continue;
+		}
 		const given = write.values[column.name];
 		if (given === undefined) {
 			if (write.op === 'patch') continue;
