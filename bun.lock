@@ -49,6 +49,9 @@
         "drizzle-orm": "^0.45.1",
         "zod": "^4.1.13",
       },
+      "devDependencies": {
+        "@sync-engine/bun-sqlite": "workspace:*",
+      },
     },
     "packages/schema": {
       "name": "@sync-engine/schema",
