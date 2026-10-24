@@ -1,7 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { bearerToken, defineSchema, LIVE_PROTOCOL } from '@sync-engine/core';
-// Relative imports: declaring these as workspace devDependencies of this package changes bun.lock.
-import { integer, sqliteTable, text } from '../core/node_modules/drizzle-orm/sqlite-core';
+import { bearerToken, defineSchema, LIVE_PROTOCOL } from '../core/src/index.ts';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { bunSqlite } from '../bun-sqlite/src/index.ts';
 import { serve } from './src/index.ts';
 

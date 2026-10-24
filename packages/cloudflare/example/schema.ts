@@ -1,5 +1,5 @@
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { defineSchema } from '@sync-engine/core';
+import { defineSchema } from '../../core/src/index.ts';
 
 export const todos = sqliteTable('todos', {
 	id: text('id').primaryKey(),

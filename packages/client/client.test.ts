@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { bearerToken, createSpace, defineSchema, type SqlDriver, type SyncResponse } from '@sync-engine/core';
-// Relative imports: declaring these as workspace devDependencies of this package changes bun.lock.
-import { integer, sqliteTable, text } from '../core/node_modules/drizzle-orm/sqlite-core';
+import { bearerToken, createSpace, defineSchema, type SqlDriver, type SyncResponse } from '../core/src/index.ts';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { bunSqlite } from '../bun-sqlite/src/index.ts';
 import { serve } from '../bun-server/src/index.ts';
 import { createSyncClient, type SyncClientOptions } from './src/index.ts';

@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bunSqlite } from '@sync-engine/bun-sqlite';
-import { createSyncClient } from '@sync-engine/client';
+import { bunSqlite } from '../../bun-sqlite/src/index.ts';
+import { createSyncClient } from '../../client/src/index.ts';
 import { schema } from './schema.ts';
 
 const port = freePort();
@@ -11,7 +11,7 @@ const state = mkdtempSync(join(tmpdir(), 'sync-engine-smoke-'));
 const log: string[] = [];
 const wrangler = Bun.spawn(
 	[
-		join(import.meta.dir, '../node_modules/.bin/wrangler'),
+		join(import.meta.dir, '../../../node_modules/.bin/wrangler'),
 		'dev',
 		'--config',
 		join(import.meta.dir, 'wrangler.jsonc'),

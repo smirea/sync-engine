@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { bunSqlite } from '@sync-engine/bun-sqlite';
+import { bunSqlite } from '../bun-sqlite/src/index.ts';
 import { bearerToken, createSpace, defineSchema, handleSync, withBearer } from './src/index.ts';
 
 const schema = defineSchema({

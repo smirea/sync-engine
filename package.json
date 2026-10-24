@@ -1,9 +1,19 @@
 {
 	"name": "sync-engine",
-	"private": true,
-	"workspaces": [
-		"packages/*"
+	"files": [
+		"packages/*/src",
+		"Package.swift",
+		"Sources"
 	],
+	"type": "module",
+	"exports": {
+		"./core": "./packages/core/src/index.ts",
+		"./client": "./packages/client/src/index.ts",
+		"./bun-sqlite": "./packages/bun-sqlite/src/index.ts",
+		"./bun-server": "./packages/bun-server/src/index.ts",
+		"./cloudflare": "./packages/cloudflare/src/index.ts",
+		"./schema": "./packages/schema/src/index.ts"
+	},
 	"scripts": {
 		"postinstall": "lefthook install",
 		"lint": "oxlint --fix && oxfmt",
@@ -15,6 +25,11 @@
 		"spec-vectors": "bun scripts/spec-vectors.ts"
 	},
 	"dependencies": {
+		"drizzle-orm": "^0.45.1",
+		"zod": "^4.1.13"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20251011.0",
 		"@types/bun": "^1.4.4",
 		"es-toolkit": "^1.53.0",
 		"kill-port-process": "^5.0.0",
@@ -22,7 +37,8 @@
 		"lodash": "^4.18.1",
 		"oxfmt": "^0.74.0",
 		"oxlint": "^1.89.0",
-		"typescript": "^7.0.2"
+		"typescript": "^7.0.2",
+		"wrangler": "^4.45.0"
 	},
 	"packageManager": "bun@1.4.4"
 }

@@ -1,5 +1,5 @@
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
-import { withBearer } from '@sync-engine/core';
+import { withBearer } from '../../core/src/index.ts';
 
 export type SyncOptions = {
 	namespace: DurableObjectNamespace;

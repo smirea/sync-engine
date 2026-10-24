@@ -1,5 +1,5 @@
 import type { DurableObjectNamespace, DurableObjectState } from '@cloudflare/workers-types';
-import { handleSync, SpaceObject } from '@sync-engine/cloudflare';
+import { handleSync, SpaceObject } from '../src/index.ts';
 import { schema } from './schema.ts';
 
 type Env = { SPACE: DurableObjectNamespace };

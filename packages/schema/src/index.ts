@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { clientStatements, type Schema } from '@sync-engine/core';
+import { clientStatements, type Schema } from '../../core/src/index.ts';
 
 const swiftFile = (schema: Schema, statements: string[]) => {
 	const tables = schema.tables.map(({ name, columns }) => {

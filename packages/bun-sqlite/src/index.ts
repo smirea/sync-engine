@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import type { Row, SqlDriver, SqlValue } from '@sync-engine/core';
+import type { Row, SqlDriver, SqlValue } from '../../core/src/index.ts';
 
 export function bunSqlite(pathOrDatabase: string | Database): SqlDriver {
 	const db = typeof pathOrDatabase === 'string' ? new Database(pathOrDatabase, { create: true }) : pathOrDatabase;
