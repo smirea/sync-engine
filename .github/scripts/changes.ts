@@ -12,16 +12,9 @@ const paths = (full ? [] : (await $`git diff --name-only -z ${comparison}`.text(
 	name => name && !['.md', '.rst'].includes(extname(name).toLowerCase()) && !name.startsWith('docs/'),
 );
 const common = full || paths.some(name => name.startsWith('.github/'));
-const bun = !['swift', 'empty'].includes(kind) && (common || paths.some(name => !name.startsWith('app-ios/')));
-const swift =
-	['swift', 'monorepo-swift'].includes(kind) &&
-	(common ||
-		paths.some(
-			name =>
-				kind === 'swift' ||
-				['app-ios/', '.env', '.bun-version'].some(prefix => name.startsWith(prefix)) ||
-				['package.json', 'bun.lock', 'bun.lockb'].includes(name),
-		));
+const isSwift = (name: string) => name === 'Package.swift' || name.startsWith('Sources/') || name.startsWith('Tests/');
+const bun = kind !== 'empty' && (common || paths.some(name => !isSwift(name)));
+const swift = common || paths.some(isSwift);
 
 const spec = common || paths.some(name => name.startsWith('spec/') || name === 'scripts/spec.ts');
 

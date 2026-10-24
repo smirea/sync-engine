@@ -10,7 +10,8 @@
 		"generated",
 		"**/generated",
 		"**/*.generated.ts",
-		"**/*.gen.ts"
+		"**/*.gen.ts",
+		"spec/vectors.json"
 	],
 	"printWidth": 120,
 	"useTabs": true,
