@@ -28,10 +28,14 @@ export class SpaceObject<Env = unknown> extends DurableObject<Env> {
 			}
 			const { 0: client, 1: server } = new WebSocketPair();
 			this.ctx.acceptWebSocket(server);
+			const offered = request.headers
+				.get('sec-websocket-protocol')
+				?.split(',')
+				.some(p => p.trim() === LIVE_PROTOCOL);
 			return new Response(null, {
 				status: 101,
 				webSocket: client,
-				headers: { 'Sec-WebSocket-Protocol': LIVE_PROTOCOL },
+				headers: offered ? { 'Sec-WebSocket-Protocol': LIVE_PROTOCOL } : {},
 			} as ResponseInit);
 		}
 		return new Response('not found', { status: 404 });

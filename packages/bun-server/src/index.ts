@@ -1,6 +1,5 @@
 import { createSpace, handleSync, LIVE_PROTOCOL, type Schema, type SqlDriver, withBearer } from '@sync-engine/core';
-// A relative import because adding @sync-engine/bun-sqlite to this package's dependencies changes bun.lock.
-import { bunSqlite } from '../../bun-sqlite/src/index.ts';
+import { bunSqlite } from '@sync-engine/bun-sqlite';
 
 export type ServeOptions = ({ driver: SqlDriver; file?: never } | { file: string; driver?: never }) & {
 	schema: Schema;

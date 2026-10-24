@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bunSqlite } from '@sync-engine/bun-sqlite';
-import { createClient, LIVE_PROTOCOL, type SyncResponse } from '@sync-engine/core';
+import { createSyncClient } from '@sync-engine/client';
 import { schema } from './schema.ts';
 
 const port = freePort();
@@ -43,38 +43,32 @@ try {
 	const unauthorized = await fetch(`http://${server}/sync`, { method: 'POST', body: '{}' });
 	assert(unauthorized.status === 401, `no token gets 401, got ${unauthorized.status}`);
 
-	const live = new WebSocket(`ws://${server}/live`, [LIVE_PROTOCOL, 'bearer.dev']);
-	await new Promise<void>((resolve, reject) => {
-		live.addEventListener('open', () => resolve(), { once: true });
-		live.addEventListener('error', event => reject(new Error(`live socket failed: ${String(event)}`)), { once: true });
-	});
-	assert(live.protocol === LIVE_PROTOCOL, `server echoed subprotocol ${JSON.stringify(live.protocol)}`);
-	await b.sync();
-	assert(b.client.cursor() === 0, `b starts at cursor 0, got ${b.client.cursor()}`);
+	b.client.start();
+	await until(() => b.client.status().live && !b.client.status().syncing, 'b live socket');
+	assert(b.client.status().cursor === 0, `b starts at cursor 0, got ${b.client.status().cursor}`);
 
 	const arrived = new Promise<number>((resolve, reject) => {
-		const timer = setTimeout(() => reject(new Error('no nudge within 10s')), 10_000);
-		live.addEventListener('message', async event => {
-			const { head } = JSON.parse(String(event.data)) as { head: number };
-			if (head <= b.client.cursor()) return;
-			await b.sync();
-			if (b.rows().length === 0) return;
+		const timer = setTimeout(() => reject(new Error('b saw no change within 10s')), 10_000);
+		b.client.onChange(tables => {
+			if (!tables.has('todos') || b.rows().length === 0) return;
 			clearTimeout(timer);
 			resolve(performance.now());
 		});
 	});
 	a.db.exec("INSERT INTO todos (id, title) VALUES ('t1', 'from a')");
 	const started = performance.now();
-	await a.sync();
+	a.client.markDirty();
 	const finished = await arrived;
 	const expected = [{ id: 't1', title: 'from a', done: 0 }];
 	assert(JSON.stringify(a.rows()) === JSON.stringify(expected), `a holds ${JSON.stringify(a.rows())}`);
 	assert(JSON.stringify(b.rows()) === JSON.stringify(expected), `b holds ${JSON.stringify(b.rows())}`);
-	assert(a.client.pending() === 0, `a cleared its outbox, pending ${a.client.pending()}`);
-	console.log(`write-to-other-client latency: ${(finished - started).toFixed(1)} ms`);
+	assert(a.client.status().pending === 0, `a cleared its outbox, pending ${a.client.status().pending}`);
+	console.log(
+		`write-to-other-client latency: ${(finished - started).toFixed(1)} ms (markDirty on a, 100 ms throttle included, to onChange on b)`,
+	);
 	console.log('a rows:', JSON.stringify(a.rows()));
 	console.log('b rows:', JSON.stringify(b.rows()));
-	live.close();
+	b.client.stop();
 	await stop();
 	process.exit(0);
 } catch (error) {
@@ -122,21 +116,15 @@ async function stop() {
 
 function peer() {
 	const db = bunSqlite(':memory:');
-	const client = createClient(db, schema);
+	const client = createSyncClient({ driver: db, schema, endpoint: `http://${server}`, token: 'dev' });
 	client.migrate();
-	return {
-		db,
-		client,
-		async sync() {
-			const { writes, acked } = client.collect();
-			const response = await fetch(`http://${server}/sync`, {
-				method: 'POST',
-				headers: { authorization: 'Bearer dev', 'content-type': 'application/json' },
-				body: JSON.stringify({ protocol: 1, client: client.clientId(), cursor: client.cursor(), writes }),
-			});
-			if (!response.ok) throw new Error(`sync ${response.status}: ${await response.text()}`);
-			client.apply((await response.json()) as SyncResponse, acked);
-		},
-		rows: () => db.exec('SELECT id, title, done FROM todos ORDER BY id'),
-	};
+	return { db, client, rows: () => db.exec('SELECT id, title, done FROM todos ORDER BY id') };
+}
+
+async function until(check: () => boolean, what: string) {
+	const deadline = Date.now() + 10_000;
+	while (!check()) {
+		if (Date.now() > deadline) throw new Error(`${what} did not happen within 10s`);
+		await Bun.sleep(50);
+	}
 }
