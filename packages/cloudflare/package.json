@@ -2,11 +2,16 @@
 	"name": "@sync-engine/cloudflare",
 	"type": "module",
 	"exports": "./src/index.ts",
+	"scripts": {
+		"smoke": "bun example/smoke.ts"
+	},
 	"dependencies": {
 		"@sync-engine/core": "workspace:*"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251011.0",
+		"@sync-engine/bun-sqlite": "workspace:*",
+		"drizzle-orm": "^0.45.1",
 		"wrangler": "^4.45.0"
 	}
 }
