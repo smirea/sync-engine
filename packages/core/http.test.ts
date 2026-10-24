@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { bunSqlite } from '@sync-engine/bun-sqlite';
-import { bearerToken, createSpace, defineSchema, handleSync } from './src/index.ts';
+import { bearerToken, createSpace, defineSchema, handleSync, withBearer } from './src/index.ts';
 
 const schema = defineSchema({
 	tables: { notes: sqliteTable('notes', { id: text('id').primaryKey(), n: integer('n').notNull().default(0) }) },
@@ -64,5 +64,18 @@ describe('bearerToken', () => {
 		).toBe('t0k');
 		expect(bearerToken(new Request('http://x', { headers: { authorization: 'Basic abc' } }))).toBe(null);
 		expect(bearerToken(new Request('http://x'))).toBe(null);
+	});
+});
+
+describe('withBearer', () => {
+	test('copies a subprotocol token into the Authorization header and leaves a header alone', () => {
+		const upgrade = new Request('http://x/live', {
+			headers: { 'sec-websocket-protocol': 'sync-engine.v1, bearer.t0k' },
+		});
+		expect(withBearer(upgrade).headers.get('authorization')).toBe('Bearer t0k');
+		expect(withBearer(upgrade).headers.get('sec-websocket-protocol')).toBe('sync-engine.v1, bearer.t0k');
+		const header = new Request('http://x/live', { headers: { authorization: 'Bearer abc' } });
+		expect(withBearer(header)).toBe(header);
+		expect(withBearer(new Request('http://x/live')).headers.get('authorization')).toBe(null);
 	});
 });

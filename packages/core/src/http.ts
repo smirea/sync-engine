@@ -43,3 +43,17 @@ export function bearerToken(request: Request): string | null {
 	const entry = protocols.map(p => p.trim()).find(p => p.startsWith('bearer.'));
 	return entry ? entry.slice('bearer.'.length) : null;
 }
+
+/**
+ * What the app's `authorize` sees. The Swift client sends the bearer on the `/live` upgrade as a header and a browser
+ * can only send it as a subprotocol, so the subprotocol form is copied into `Authorization` and an owner check reads
+ * one place. Servers still upgrade the original request.
+ */
+export function withBearer(request: Request): Request {
+	if (request.headers.has('authorization')) return request;
+	const token = bearerToken(request);
+	if (!token) return request;
+	const headers = new Headers(request.headers);
+	headers.set('authorization', `Bearer ${token}`);
+	return new Request(request, { headers });
+}
