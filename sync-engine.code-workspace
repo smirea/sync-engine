@@ -1,0 +1,23 @@
+{
+	"folders": [{ "path": "." }],
+	"settings": {
+		"files.exclude": {
+			"**/node_modules": true,
+			"**/dist": true,
+			"**/out": true,
+			"**/build": true,
+			"**/.cache": true,
+			"**/generated": true,
+			"**/*.tsbuildinfo": true,
+		},
+		"search.exclude": {
+			"**/node_modules": true,
+			"**/dist": true,
+			"**/out": true,
+			"**/build": true,
+			"**/.cache": true,
+			"**/generated": true,
+			"**/*.tsbuildinfo": true,
+		},
+	},
+}

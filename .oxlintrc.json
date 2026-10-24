@@ -1,0 +1,26 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node"],
+	"categories": {
+		"correctness": "error",
+		"suspicious": "warn",
+		"perf": "warn"
+	},
+	"rules": {
+		"no-unused-vars": "warn",
+		"no-console": "off",
+		"unicorn/no-null": "off",
+		"unicorn/prefer-top-level-await": "off",
+		"unicorn/filename-case": "off",
+		"node/no-process-env": "error"
+	},
+	"overrides": [
+		{
+			"files": ["**/env.ts", "scripts/**", ".claude/**"],
+			"rules": {
+				"node/no-process-env": "off"
+			}
+		}
+	],
+	"ignorePatterns": ["node_modules", "dist", "build", "generated", "**/generated", "**/*.generated.ts", "**/*.gen.ts"]
+}

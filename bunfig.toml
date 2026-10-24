@@ -1,0 +1,2 @@
+[test]
+preload = ["./scripts/test-timezone.ts", "./scripts/test-guard.ts"]

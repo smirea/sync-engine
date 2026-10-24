@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: true
+  commands:
+    # One command: both fixers rewrite the same staged files, and in parallel one would overwrite the other's edit.
+    fix:
+      run: >-
+        bunx oxlint --fix --no-error-on-unmatched-pattern {staged_files}
+        && bunx oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+    typecheck:
+      glob: '*.{js,mjs,mts,ts,tsx,json,jsonc}'
+      run: bun check
+    test:
+      glob: '*.{js,mjs,mts,ts,tsx}'
+      run: bun --no-env-file scripts/test-changed.ts {staged_files}
+
+pre-push:
+  commands:
+    test:
+      glob: '*.{js,mjs,mts,ts,tsx}'
+      run: bun --no-env-file scripts/test-changed.ts {push_files}

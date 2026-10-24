@@ -1,0 +1,24 @@
+{
+	"name": "sync-engine",
+	"private": true,
+	"scripts": {
+		"postinstall": "lefthook install",
+		"lint": "oxlint --fix && oxfmt",
+		"lint:ci": "oxlint && oxfmt --check",
+		"typecheck": "bun check",
+		"test": "bun test --pass-with-no-tests",
+		"dev": "bun --watch src/index.ts",
+		"build": "bun build src/index.ts --target bun --outdir dist"
+	},
+	"dependencies": {
+		"@types/bun": "^1.4.4",
+		"es-toolkit": "^1.53.0",
+		"kill-port-process": "^5.0.0",
+		"lefthook": "^2.2.2",
+		"lodash": "^4.18.1",
+		"oxfmt": "^0.74.0",
+		"oxlint": "^1.89.0",
+		"typescript": "^7.0.2"
+	},
+	"packageManager": "bun@1.4.4"
+}
