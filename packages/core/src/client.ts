@@ -93,7 +93,10 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 					table.name,
 					pulled.id,
 					Object.fromEntries(
-						columns.map(c => [c.name, c.name in pulled.values ? pulled.values[c.name] : (c.default ?? null)]),
+						columns.map(c => {
+							const value = pulled.values[c.name];
+							return [c.name, value === undefined ? (c.default ?? null) : value];
+						}),
 					),
 				);
 			}

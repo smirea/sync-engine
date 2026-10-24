@@ -20,6 +20,12 @@
         "typescript": "^7.0.2",
         "wrangler": "^4.45.0",
       },
+      "peerDependencies": {
+        "@cloudflare/workers-types": "^4.20251011.0",
+      },
+      "optionalPeers": [
+        "@cloudflare/workers-types",
+      ],
     },
   },
   "packages": {

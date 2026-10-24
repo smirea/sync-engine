@@ -1,3 +1,4 @@
+/// <reference path="./cloudflare-workers.d.ts" />
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { DurableObject } from 'cloudflare:workers';
 import {
