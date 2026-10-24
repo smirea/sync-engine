@@ -1,5 +1,4 @@
 import type { DurableObjectNamespace, DurableObjectState } from '@cloudflare/workers-types';
-import { bearerToken } from '@sync-engine/core';
 import { handleSync, SpaceObject } from '@sync-engine/cloudflare';
 import { schema } from './schema.ts';
 
@@ -13,5 +12,9 @@ export class Space extends SpaceObject<Env> {
 
 export default {
 	fetch: (request: Request, env: Env) =>
-		handleSync(request, { namespace: env.SPACE, spaceId: 'demo', authorize: r => bearerToken(r) === 'dev' }),
+		handleSync(request, {
+			namespace: env.SPACE,
+			spaceId: 'demo',
+			authorize: r => r.headers.get('authorization') === 'Bearer dev',
+		}),
 };

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { bearerToken, createSpace, defineSchema } from '@sync-engine/core';
+import { createSpace, defineSchema } from '@sync-engine/core';
 import { durableDriver } from './src/driver.ts';
 import { handleSync } from './src/worker.ts';
 
@@ -17,11 +17,17 @@ describe('handleSync', () => {
 			},
 		}),
 	} as unknown as DurableObjectNamespace;
-	const options = { namespace, spaceId: 'demo', authorize: (request: Request) => bearerToken(request) === 'dev' };
+	const options = {
+		namespace,
+		spaceId: 'demo',
+		authorize: (request: Request) => request.headers.get('authorization') === 'Bearer dev',
+	};
 
 	test('401 before the object is touched', async () => {
-		const request = new Request('http://x/sync', { method: 'POST', headers: { authorization: 'Bearer nope' } });
-		expect((await handleSync(request, options)).status).toBe(401);
+		const wrong = new Request('http://x/sync', { method: 'POST', headers: { authorization: 'Bearer nope' } });
+		expect((await handleSync(wrong, options)).status).toBe(401);
+		const none = new Request('http://x/live', { headers: { upgrade: 'websocket' } });
+		expect((await handleSync(none, options)).status).toBe(401);
 		expect(seen).toHaveLength(0);
 	});
 
@@ -40,7 +46,13 @@ describe('handleSync', () => {
 		expect(await forwarded.text()).toBe('{"protocol":1}');
 	});
 
-	test('GET /live authorizes through the subprotocol and passes the upgrade through', async () => {
+	test('GET /live with the header reaches the stub', async () => {
+		const request = new Request('http://x/live', { headers: { upgrade: 'websocket', authorization: 'Bearer dev' } });
+		expect((await handleSync(request, options)).status).toBe(200);
+		expect(seen.pop()!.headers.get('authorization')).toBe('Bearer dev');
+	});
+
+	test('GET /live with the subprotocol token authorizes and passes the original upgrade through', async () => {
 		const request = new Request('http://x/live', {
 			headers: { upgrade: 'websocket', 'sec-websocket-protocol': 'sync-engine.v1, bearer.dev' },
 		});
@@ -50,6 +62,7 @@ describe('handleSync', () => {
 		expect(forwarded.url).toBe('http://x/live');
 		expect(forwarded.headers.get('upgrade')).toBe('websocket');
 		expect(forwarded.headers.get('sec-websocket-protocol')).toBe('sync-engine.v1, bearer.dev');
+		expect(forwarded.headers.get('authorization')).toBeNull();
 	});
 });
 
