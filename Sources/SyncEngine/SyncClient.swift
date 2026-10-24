@@ -199,7 +199,7 @@ public final class SyncClient {
 
     private func retryLater() {
         failures += 1
-        schedule(after: .seconds(min(60, 1 << min(failures, 6))))
+        schedule(after: .seconds(min(15, 1 << min(failures, 6))))
     }
 
     /// Writes within 100 ms of the first share its sync; a write during a long backoff pulls the sync forward.
@@ -253,6 +253,9 @@ public final class SyncClient {
     }
 
     private func liveLoop() -> Task<Void, Never> {
+        let onOpen: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor in self?.schedule(after: .zero) }
+        }
         let onHead: @Sendable (Int) -> Void = { [weak self] head in
             Task { @MainActor in self?.received(head: head) }
         }
@@ -260,7 +263,7 @@ public final class SyncClient {
             var attempt = 0
             while !Task.isCancelled {
                 guard let socket = self?.openSocket() else { return }
-                let connected = await Self.listen(to: socket, onHead: onHead)
+                let connected = await Self.listen(to: socket, onOpen: onOpen, onHead: onHead)
                 do {
                     guard let self else { return }
                     if (socket.response as? HTTPURLResponse)?.statusCode == 401 {
@@ -271,7 +274,7 @@ public final class SyncClient {
                 }
                 guard !Task.isCancelled else { return }
                 attempt = connected ? 1 : attempt + 1
-                try? await Task.sleep(for: .seconds(min(60, 1 << min(attempt, 6))))
+                try? await Task.sleep(for: .seconds(min(15, 1 << min(attempt, 6))))
             }
         }
     }
@@ -288,8 +291,9 @@ public final class SyncClient {
     }
 
     /// Receives until the socket fails. Pings keep NAT and proxy idle timeouts from dropping it, and the first pong
-    /// or message counts as connected so the backoff resets. Holds no reference to the client.
-    private nonisolated static func listen(to socket: URLSessionWebSocketTask, onHead: @escaping @Sendable (Int) -> Void) async -> Bool {
+    /// or message counts as connected so the backoff resets and a sync covers nudges missed while disconnected.
+    /// Holds no reference to the client.
+    private nonisolated static func listen(to socket: URLSessionWebSocketTask, onOpen: @escaping @Sendable () -> Void, onHead: @escaping @Sendable (Int) -> Void) async -> Bool {
         var connected = false
         let pinger = Task {
             while !Task.isCancelled {
@@ -301,6 +305,7 @@ public final class SyncClient {
         do {
             try await socket.ping()
             connected = true
+            onOpen()
             while true {
                 let data = switch try await socket.receive() {
                 case let .string(text): Data(text.utf8)
@@ -335,9 +340,7 @@ public final class SyncClient {
             Task { [weak self] in
                 for await _ in NotificationCenter.default.notifications(named: UIApplication.willEnterForegroundNotification).map({ _ in true }) {
                     guard let self else { return }
-                    foreground = true
-                    reconnect()
-                    await enqueue()
+                    await enteredForeground()
                 }
             },
             Task { [weak self] in
@@ -354,9 +357,17 @@ public final class SyncClient {
         #endif
     }
 
+    func enteredForeground() async {
+        foreground = true
+        failures = 0
+        reconnect()
+        await enqueue()
+    }
+
     private func pathChanged(satisfied: Bool) {
         defer { online = satisfied }
         guard satisfied, !online else { return }
+        failures = 0
         reconnect()
         schedule(after: .zero)
     }

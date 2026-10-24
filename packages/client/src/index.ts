@@ -11,6 +11,8 @@ export type SyncClientOptions = {
 	WebSocket?: typeof WebSocket;
 	/** Milliseconds between periodic syncs while started. */
 	interval?: number;
+	/** Longest wait in milliseconds before a failed sync is retried or a dropped socket is reopened. */
+	maxBackoff?: number;
 };
 
 export type SyncStatus = { live: boolean; syncing: boolean; pending: number; cursor: number; lastError: string | null };
@@ -41,18 +43,22 @@ type Live = {
 
 const PING_MS = 30_000;
 const FIRST_BACKOFF_MS = 1000;
-const MAX_BACKOFF_MS = 60_000;
+const MAX_BACKOFF_MS = 15_000;
 const DIRTY_MS = 100;
 
 export function createSyncClient(options: SyncClientOptions): SyncClient {
 	const core = createClient(options.driver, options.schema);
 	const fetchFn = options.fetch ?? globalThis.fetch;
 	const Socket = options.WebSocket ?? globalThis.WebSocket;
+	const maxBackoff = options.maxBackoff ?? MAX_BACKOFF_MS;
+	const firstBackoff = Math.min(FIRST_BACKOFF_MS, maxBackoff);
 	const listeners = new Set<(tables: ReadonlySet<string>) => void>();
 	let migrated = false;
 	let run: Run = { kind: 'idle' };
 	let lastError: string | null = null;
 	let dirty: ReturnType<typeof setTimeout> | null = null;
+	let retry: ReturnType<typeof setTimeout> | null = null;
+	let retryBackoff = firstBackoff;
 	let live: Live | null = null;
 
 	const ready = () => {
@@ -92,13 +98,28 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		};
 		try {
 			const { response, touched } = await once();
+			retryBackoff = firstBackoff;
 			// Settle before notifying so a listener reads the status of a finished sync.
 			settle();
 			if (touched.size) for (const listener of listeners) listener(touched);
 			return response;
+		} catch (error) {
+			if (live && !retry) {
+				retry = setTimeout(() => {
+					retry = null;
+					background();
+				}, retryBackoff);
+				retryBackoff = Math.min(retryBackoff * 2, maxBackoff);
+			}
+			throw error;
 		} finally {
 			settle();
 		}
+	}
+
+	function clearRetry() {
+		if (retry) clearTimeout(retry);
+		retry = null;
 	}
 
 	function sync(): Promise<SyncResponse> {
@@ -122,7 +143,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		state.socket = socket;
 		socket.addEventListener('open', () => {
 			state.heard = true;
-			state.backoff = FIRST_BACKOFF_MS;
+			state.backoff = firstBackoff;
 			background();
 		});
 		socket.addEventListener('message', event => {
@@ -145,9 +166,31 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		state.socket?.close();
 		state.socket = null;
 		if (live !== state) return;
-		state.reconnect = setTimeout(() => connect(state), state.backoff);
-		state.backoff = Math.min(state.backoff * 2, MAX_BACKOFF_MS);
+		state.reconnect = setTimeout(() => {
+			state.reconnect = null;
+			connect(state);
+		}, state.backoff);
+		state.backoff = Math.min(state.backoff * 2, maxBackoff);
 	}
+
+	function wake() {
+		retryBackoff = firstBackoff;
+		clearRetry();
+		const state = live;
+		if (state) {
+			state.backoff = firstBackoff;
+			if (state.reconnect) {
+				clearTimeout(state.reconnect);
+				state.reconnect = null;
+				connect(state);
+			}
+		}
+		background();
+	}
+
+	const visible = () => {
+		if (globalThis.document?.visibilityState !== 'hidden') wake();
+	};
 
 	function ping(state: Live) {
 		if (state.socket?.readyState !== Socket.OPEN) return;
@@ -169,7 +212,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			const state: Live = {
 				socket: null,
 				heard: true,
-				backoff: FIRST_BACKOFF_MS,
+				backoff: firstBackoff,
 				timers: [],
 				reconnect: null,
 			};
@@ -178,20 +221,24 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 				setInterval(() => ping(state), PING_MS),
 				setInterval(background, options.interval ?? 60_000),
 			);
-			globalThis.addEventListener?.('online', background);
+			globalThis.addEventListener?.('online', wake);
+			globalThis.document?.addEventListener('visibilitychange', visible);
 			connect(state);
 		},
 		stop() {
 			const state = live;
 			if (!state) return;
 			live = null;
+			clearRetry();
 			for (const timer of state.timers) clearInterval(timer);
 			if (state.reconnect) clearTimeout(state.reconnect);
-			globalThis.removeEventListener?.('online', background);
+			globalThis.removeEventListener?.('online', wake);
+			globalThis.document?.removeEventListener('visibilitychange', visible);
 			drop(state);
 		},
 		markDirty() {
 			ready();
+			clearRetry();
 			if (dirty) return;
 			dirty = setTimeout(() => {
 				dirty = null;

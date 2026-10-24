@@ -121,6 +121,41 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(StubServer.received.count, 2)
     }
 
+    func testALocalWriteDuringABackoffPullsTheRetryForward() async throws {
+        let (client, pool) = try client()
+        StubServer.reset(.failure(.notConnectedToInternet))
+        client.start()
+        defer { client.stop() }
+        try await waitUntil { client.status == .offline }
+        XCTAssertEqual(StubServer.received.count, 1)
+        let written = ContinuousClock.now
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
+        try await waitUntil { StubServer.received.count == 2 }
+        XCTAssertLessThan(written.duration(to: StubServer.received[1].at), .milliseconds(500))
+        let request = try JSONDecoder().decode(SyncRequest.self, from: StubServer.received[1].body)
+        XCTAssertEqual(request.writes.map(\.id), ["n1"])
+    }
+
+    func testAForegroundEventAfterFailuresSyncsAtOnceAndResetsTheBackoff() async throws {
+        let (client, _) = try client()
+        StubServer.reset(.failure(.notConnectedToInternet))
+        client.start()
+        defer { client.stop() }
+        try await waitUntil { client.status == .offline }
+        await client.sync()
+        await client.sync()
+        XCTAssertEqual(StubServer.received.count, 3)
+        let resumed = ContinuousClock.now
+        await client.enteredForeground()
+        XCTAssertEqual(StubServer.received.count, 4)
+        XCTAssertLessThan(resumed.duration(to: StubServer.received.last!.at), .milliseconds(500))
+        StubServer.reply(StubServer.json(200, Fixture.response(head: 1, acked: 0)))
+        try await Task.sleep(for: .milliseconds(2500))
+        XCTAssertEqual(StubServer.received.count, 5)
+        XCTAssertLessThan(resumed.duration(to: StubServer.received.last!.at), .seconds(3))
+        XCTAssertEqual(client.status, .idle)
+    }
+
     private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
         for _ in 0..<200 where !condition() {
             try await Task.sleep(for: .milliseconds(10))

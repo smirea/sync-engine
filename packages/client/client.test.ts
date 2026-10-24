@@ -193,4 +193,26 @@ describe('createSyncClient over HTTP', () => {
 		expect(await changed).toEqual(new Set(['notes']));
 		expect(b.rows()).toEqual([{ id: 'n1', title: 'after restart', done: 0 }]);
 	});
+
+	test('a write queued while the server is down lands within 3 s of its restart', async () => {
+		const first = server();
+		const a = peer(first.endpoint, { maxBackoff: 250 });
+		a.client.start();
+		await until(() => a.client.status().live && !a.client.status().syncing);
+
+		const port = first.instance.port;
+		first.instance.stop(true);
+		await until(() => !a.client.status().live);
+		insert(a.db, 'n1', 'queued');
+		a.client.markDirty();
+		await until(() => a.client.status().lastError !== null);
+		await Bun.sleep(3500);
+
+		const second = server({ driver: first.driver, port });
+		const restarted = performance.now();
+		await until(() => a.client.status().pending === 0, 3000);
+		expect(performance.now() - restarted).toBeLessThan(3000);
+		expect(second.dump()).toEqual({ notes: [{ id: 'n1', title: 'queued', done: 0 }] });
+		expect(a.client.status().lastError).toBeNull();
+	}, 10_000);
 });
