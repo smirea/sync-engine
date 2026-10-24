@@ -1,0 +1,8 @@
+{
+	"name": "@sync-engine/client",
+	"type": "module",
+	"exports": "./src/index.ts",
+	"dependencies": {
+		"@sync-engine/core": "workspace:*"
+	}
+}

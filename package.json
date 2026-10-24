@@ -1,6 +1,9 @@
 {
 	"name": "sync-engine",
 	"private": true,
+	"workspaces": [
+		"packages/*"
+	],
 	"scripts": {
 		"postinstall": "lefthook install",
 		"lint": "oxlint --fix && oxfmt",
@@ -8,8 +11,8 @@
 		"typecheck": "bun check",
 		"test": "bun test --pass-with-no-tests",
 		"spec": "bun scripts/spec.ts",
-		"dev": "bun --watch src/index.ts",
-		"build": "bun build src/index.ts --target bun --outdir dist"
+		"build": "bun build packages/core/src/index.ts --target browser --outdir dist",
+		"spec-vectors": "bun scripts/spec-vectors.ts"
 	},
 	"dependencies": {
 		"@types/bun": "^1.4.4",

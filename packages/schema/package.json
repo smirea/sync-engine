@@ -1,0 +1,8 @@
+{
+	"name": "@sync-engine/schema",
+	"type": "module",
+	"exports": "./src/index.ts",
+	"dependencies": {
+		"@sync-engine/core": "workspace:*"
+	}
+}
