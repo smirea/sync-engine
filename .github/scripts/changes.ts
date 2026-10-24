@@ -23,4 +23,6 @@ const swift =
 				['package.json', 'bun.lock', 'bun.lockb'].includes(name),
 		));
 
-appendFileSync(output, `bun=${bun}\nswift=${swift}\n`);
+const spec = common || paths.some(name => name.startsWith('spec/') || name === 'scripts/spec.ts');
+
+appendFileSync(output, `bun=${bun}\nswift=${swift}\nspec=${spec}\n`);

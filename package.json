@@ -7,6 +7,7 @@
 		"lint:ci": "oxlint && oxfmt --check",
 		"typecheck": "bun check",
 		"test": "bun test --pass-with-no-tests",
+		"spec": "bun scripts/spec.ts",
 		"dev": "bun --watch src/index.ts",
 		"build": "bun build src/index.ts --target bun --outdir dist"
 	},
