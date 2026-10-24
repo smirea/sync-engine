@@ -309,6 +309,41 @@ describe('protocol amendments', () => {
 		expect([high.acked, high.head, low.acked, low.head]).toEqual([5, 2, 5, 2]);
 	});
 
+	test('interleaved edits give a batch out of seq order and every write still applies', () => {
+		const { server, a } = setup();
+		insert(a, 'n1', 'A');
+		insert(a, 'n2', 'B');
+		update(a, 'n1', 'title', 'A2');
+		expect(a.client.collect().writes.map(w => w.seq)).toEqual([3, 2]);
+		const response = a.sync();
+		expect(response.acked).toBe(3);
+		expect(server.dump().notes).toEqual([row('n1', 'A2'), row('n2', 'B')]);
+		expect(a.client.pending()).toBe(0);
+	});
+
+	test('a rejected insert the server never stored comes back as a tombstone', () => {
+		const { a } = setup();
+		insert(a, 'n1', 'first');
+		a.sync();
+		a.db.exec("INSERT INTO notes (id, title, tags) VALUES ('n2', 'bad', '[1]')");
+		const response = a.sync();
+		expect(response.rejected.map(r => r.id)).toEqual(['n2']);
+		expect(response.rows).toEqual([{ table: 'notes', id: 'n2', deleted: 1 }]);
+		expect(a.rows()).toEqual([row('n1', 'first')]);
+	});
+
+	test('an explicit null from the server stays null, the default fills only an absent column', () => {
+		const drafts = sqliteTable('drafts', {
+			id: text('id').primaryKey(),
+			body: text('body').default('fallback'),
+		});
+		const { a, b } = setup(defineSchema({ tables: { drafts } }));
+		a.db.exec("INSERT INTO drafts (id, body) VALUES ('d1', NULL)");
+		a.sync();
+		b.pull();
+		expect(b.db.exec('SELECT * FROM drafts')).toEqual([{ id: 'd1', body: null }]);
+	});
+
 	test('a copied database mints a new client id and re-sends its outbox', () => {
 		const { server, a, b } = setup();
 		for (let i = 1; i <= 5; i++) insert(a, `n${i}`, `note ${i}`);

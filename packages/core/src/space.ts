@@ -112,7 +112,7 @@ export function createSpace(driver: SqlDriver, schema: Schema): Space {
 			if (!table || seen.has(rowKey(name, id))) continue;
 			seen.add(rowKey(name, id));
 			const change = driver.exec('SELECT deleted FROM _changes WHERE "table" = ? AND id = ?', [name, id])[0];
-			if (change) rows.push(...current(table, id, change.deleted));
+			rows.push(...(change ? current(table, id, change.deleted) : [{ table: name, id, deleted: 1 as const }]));
 		}
 		return rows;
 	}
@@ -173,7 +173,7 @@ export function createSpace(driver: SqlDriver, schema: Schema): Space {
 				}
 			};
 
-			for (const write of request.writes) {
+			for (const write of request.writes.toSorted((x, y) => x.seq - y.seq)) {
 				if (write.seq <= last) continue;
 				last = write.seq;
 				const table = tables.get(write.table);

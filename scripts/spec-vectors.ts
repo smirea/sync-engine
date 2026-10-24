@@ -108,6 +108,7 @@ function scenario(seed: number): Scenario {
 			.filter(() => random() < 0.6)
 			.map(c => [c, int(10)]);
 	const next = Array.from({ length: CLIENTS }, () => 0);
+	const sent: number[][] = Array.from({ length: CLIENTS }, () => []);
 	let current: State = { $: 'State', rows: { $: 'KNil' }, head: 0, changes: { $: 'KNil' }, clients: { $: 'NNil' } };
 	const states: State[] = [];
 	const writes: VectorWrite[] = [];
@@ -115,9 +116,11 @@ function scenario(seed: number): Scenario {
 		const client = int(CLIENTS);
 		const roll = random();
 		let seq: number;
-		if (roll < 0.7) seq = ++next[client]!;
-		else if (roll < 0.85) seq = int(next[client]! + 1);
+		const replays = sent[client]!;
+		if (roll < 0.7 || !replays.length) seq = ++next[client]!;
+		else if (roll < 0.85) seq = replays[int(replays.length)]!;
 		else seq = next[client]! += 2;
+		if (!replays.includes(seq)) replays.push(seq);
 		const table = int(TABLES);
 		const id = int(IDS);
 		const kind = random();

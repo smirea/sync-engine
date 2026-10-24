@@ -92,7 +92,9 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 					driver,
 					table.name,
 					pulled.id,
-					Object.fromEntries(columns.map(c => [c.name, pulled.values[c.name] ?? c.default ?? null])),
+					Object.fromEntries(
+						columns.map(c => [c.name, c.name in pulled.values ? pulled.values[c.name] : (c.default ?? null)]),
+					),
 				);
 			}
 			driver.exec('DELETE FROM _outbox WHERE seq <= ?', [acked]);
