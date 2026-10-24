@@ -36,9 +36,9 @@ describe('defineSchema', () => {
 			"CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT 'it''s', done INTEGER NOT NULL DEFAULT 0, tags TEXT NOT NULL DEFAULT '[]', weight REAL, at INTEGER)",
 		]);
 		expect(schema.ddl.client.slice(2, 5)).toEqual([
-			"CREATE TRIGGER IF NOT EXISTS _ob_i_notes AFTER INSERT ON notes WHEN coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0 BEGIN INSERT INTO _outbox (\"table\", id, op, col) VALUES ('notes', NEW.id, 'insert', NULL); END",
-			"CREATE TRIGGER IF NOT EXISTS _ob_d_notes AFTER DELETE ON notes WHEN coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0 BEGIN INSERT INTO _outbox (\"table\", id, op, col) VALUES ('notes', OLD.id, 'delete', NULL); END",
-			"CREATE TRIGGER IF NOT EXISTS _ob_u_notes_title AFTER UPDATE OF title ON notes WHEN coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0 AND OLD.title IS NOT NEW.title BEGIN INSERT INTO _outbox (\"table\", id, op, col) VALUES ('notes', NEW.id, 'update', 'title'); END",
+			"CREATE TRIGGER IF NOT EXISTS _ob_i_notes AFTER INSERT ON notes\n  WHEN coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0\n  BEGIN INSERT INTO _outbox (\"table\", id, op, col) VALUES ('notes', NEW.id, 'insert', NULL); END",
+			"CREATE TRIGGER IF NOT EXISTS _ob_d_notes AFTER DELETE ON notes\n  WHEN coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0\n  BEGIN INSERT INTO _outbox (\"table\", id, op, col) VALUES ('notes', OLD.id, 'delete', NULL); END",
+			"CREATE TRIGGER IF NOT EXISTS _ob_u_notes_title AFTER UPDATE OF title ON notes\n  WHEN coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0 AND OLD.title IS NOT NEW.title\n  BEGIN INSERT INTO _outbox (\"table\", id, op, col) VALUES ('notes', NEW.id, 'update', 'title'); END",
 		]);
 		expect(schema.ddl.client).toHaveLength(2 + 2 + 6);
 	});

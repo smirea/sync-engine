@@ -101,18 +101,30 @@ const NOT_APPLYING = "coalesce((SELECT value FROM _meta WHERE key = 'applying'),
 
 function triggers({ name: t, columns }: Table): string[] {
 	const queue = (id: string, op: string, col: string) =>
-		`BEGIN INSERT INTO _outbox ("table", id, op, col) VALUES ('${t}', ${id}, '${op}', ${col}); END`;
+		`  BEGIN INSERT INTO _outbox ("table", id, op, col) VALUES ('${t}', ${id}, '${op}', ${col}); END`;
 	return [
-		`CREATE TRIGGER IF NOT EXISTS _ob_i_${t} AFTER INSERT ON ${t} WHEN ${NOT_APPLYING} ${queue('NEW.id', 'insert', 'NULL')}`,
-		`CREATE TRIGGER IF NOT EXISTS _ob_d_${t} AFTER DELETE ON ${t} WHEN ${NOT_APPLYING} ${queue('OLD.id', 'delete', 'NULL')}`,
+		`CREATE TRIGGER IF NOT EXISTS _ob_i_${t} AFTER INSERT ON ${t}\n  WHEN ${NOT_APPLYING}\n${queue('NEW.id', 'insert', 'NULL')}`,
+		`CREATE TRIGGER IF NOT EXISTS _ob_d_${t} AFTER DELETE ON ${t}\n  WHEN ${NOT_APPLYING}\n${queue('OLD.id', 'delete', 'NULL')}`,
 		...columns
 			.filter(c => c.name !== 'id')
 			.map(
 				({ name: c }) =>
-					`CREATE TRIGGER IF NOT EXISTS _ob_u_${t}_${c} AFTER UPDATE OF ${c} ON ${t} WHEN ${NOT_APPLYING} AND OLD.${c} IS NOT NEW.${c} ${queue('NEW.id', 'update', `'${c}'`)}`,
+					`CREATE TRIGGER IF NOT EXISTS _ob_u_${t}_${c} AFTER UPDATE OF ${c} ON ${t}\n  WHEN ${NOT_APPLYING} AND OLD.${c} IS NOT NEW.${c}\n${queue('NEW.id', 'update', `'${c}'`)}`,
 			),
 	];
 }
+
+/**
+ * The client DDL as the Swift generator ships it: every table's CREATE followed by one ADD COLUMN per column, which a
+ * client without PRAGMA diffing runs and lets fail on the columns it already has, then the client tables and triggers.
+ */
+export const clientStatements = (schema: Schema): string[] => [
+	...schema.tables.flatMap(table => [
+		createTable(table),
+		...table.columns.filter(c => c.name !== 'id').map(c => `ALTER TABLE ${table.name} ADD COLUMN ${columnDdl(c)}`),
+	]),
+	...schema.ddl.client,
+];
 
 export function migrate(driver: SqlDriver, schema: Schema, side: 'server' | 'client'): void {
 	driver.transaction(() => {
