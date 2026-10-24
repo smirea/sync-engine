@@ -8,3 +8,4 @@
 - **Tests run in a pinned zone and never against a remote database.** `bunfig.toml` preloads `scripts/test-timezone.ts` and `scripts/test-guard.ts`.
 - **Git hooks are never skipped.** A Claude Code hook in `.claude/settings.json` blocks `--no-verify` and lefthook overrides. A failing hook gets its cause fixed; a flaky test is a bad test.
 - **Run only the relevant tests locally.** CI runs the full suite.
+- **The protocol proofs run under the Lean kernel.** `bun run spec` runs `bend spec/PROOF.bend --verdict` with the Bend release and Lean toolchain pinned in `spec/toolchain.json`; `--install` fetches both into `~/.bend` and `~/.elan` without touching a shell profile. Pre-commit runs it when a `spec/` file is staged, and the CI `proofs` job runs it with `--install` when `spec/` or `scripts/spec.ts` changed, caching the two toolchains by the pin file's hash. A failing proof is fixed by re-aligning `PROOF.bend`, never by weakening `LAWS.bend`.

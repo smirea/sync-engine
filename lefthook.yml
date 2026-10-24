@@ -13,6 +13,9 @@ pre-commit:
     test:
       glob: '*.{js,mjs,mts,ts,tsx}'
       run: bun --no-env-file scripts/test-changed.ts {staged_files}
+    spec:
+      glob: 'spec/*'
+      run: bun scripts/spec.ts
 
 pre-push:
   commands:
