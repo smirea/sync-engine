@@ -1,4 +1,4 @@
-import { createSpace, handleSync, LIVE_PROTOCOL, type Schema, type SqlDriver } from '@sync-engine/core';
+import { createSpace, handleSync, LIVE_PROTOCOL, type Schema, type SqlDriver, withBearer } from '@sync-engine/core';
 // A relative import because adding @sync-engine/bun-sqlite to this package's dependencies changes bun.lock.
 import { bunSqlite } from '../../bun-sqlite/src/index.ts';
 
@@ -18,15 +18,21 @@ export function serve({ schema, authorize, port, hostname, ...storage }: ServeOp
 		async fetch(request, server) {
 			const route = `${request.method} ${new URL(request.url).pathname}`;
 			if (route !== 'POST /sync' && route !== 'GET /live') return new Response('not found', { status: 404 });
-			if (!(await authorize(request))) return new Response('unauthorized', { status: 401 });
+			// withBearer may rebuild the request, which moves the body, so /sync reads the normalized copy from here on.
+			const normalized = withBearer(request);
+			if (!(await authorize(normalized))) return new Response('unauthorized', { status: 401 });
 			if (route === 'GET /live') {
-				if (server.upgrade(request, { headers: { 'Sec-WebSocket-Protocol': LIVE_PROTOCOL }, data: undefined })) {
-					return undefined;
-				}
+				// Echo the subprotocol only when offered: a client that sent none, like the Swift one, fails on an echo.
+				const offered = request.headers
+					.get('sec-websocket-protocol')
+					?.split(',')
+					.some(p => p.trim() === LIVE_PROTOCOL);
+				const headers = offered ? { 'Sec-WebSocket-Protocol': LIVE_PROTOCOL } : undefined;
+				if (server.upgrade(request, { headers, data: undefined })) return undefined;
 				return new Response('expected a WebSocket upgrade', { status: 400 });
 			}
 			const before = space.head();
-			const response = await handleSync(space, request);
+			const response = await handleSync(space, normalized);
 			const head = space.head();
 			if (head > before) server.publish('live', JSON.stringify({ head }));
 			return response;
