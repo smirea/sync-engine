@@ -91,6 +91,7 @@ final class StubServer: URLProtocol {
         let url: URL
         let authorization: String?
         let body: Data
+        let at = ContinuousClock.now
     }
 
     enum Reply: Sendable {

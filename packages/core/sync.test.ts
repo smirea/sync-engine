@@ -145,6 +145,23 @@ describe('two clients and one space', () => {
 		expect(a.client.pending()).toBe(0);
 	});
 
+	test('an id validator runs against the write id', () => {
+		const items = sqliteTable('items', { id: text('id').primaryKey(), name: text('name').notNull() });
+		const { server } = setup(
+			defineSchema({
+				tables: { items },
+				values: { items: { id: z.string().startsWith('custom-', 'needs a custom- prefix') } },
+			}),
+		);
+		const sync = (seq: number, id: string) =>
+			server.sync({ protocol: 1, client: 'c', cursor: 0, writes: [put(seq, 'items', id, { name: 'x' })] });
+		expect(sync(1, 'x1').rejected).toEqual([
+			{ seq: 1, table: 'items', id: 'x1', reason: 'id: needs a custom- prefix' },
+		]);
+		expect(sync(2, 'custom-x1').rejected).toEqual([]);
+		expect(server.dump()).toEqual({ items: [{ id: 'custom-x1', name: 'x' }] });
+	});
+
 	test('cursor 0 gets a snapshot and the triggers stay quiet while applying', () => {
 		const { a, b } = setup();
 		insert(a, 'n1', 'one');
