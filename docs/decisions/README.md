@@ -5,4 +5,5 @@ sync-engine's concepts, goals, paradigms, and high-level system decisions, one f
 - [Product goals](product.md): what sync-engine is and who it is for.
 - [Stack](stack.md): tooling, frameworks, and shared code.
 - [Sync](sync.md): the sync model, the server shape, the protocol, and the schema pipeline.
+- [Swift client](swift.md): the SwiftPM package, GRDB as its one dependency, and how an iOS app consumes it.
 - [Workflow](workflow.md): threads, PRs, worktrees, git hooks, and which tests run where.

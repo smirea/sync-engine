@@ -19,3 +19,8 @@ dist
 
 # other
 .DS_Store
+
+# swift
+.build
+.swiftpm
+Package.resolved
