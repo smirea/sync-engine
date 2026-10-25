@@ -1,6 +1,12 @@
 import Foundation
 import GRDB
 
+/// The page to request next and the head of the snapshot's first page, which becomes the cursor once it ends.
+struct SnapshotProgress: Equatable, Sendable {
+    let after: After
+    let head: Int
+}
+
 /// The outbox coalesced into writes. `highest` is the largest outbox seq read, sent or dropped, so the client can
 /// clear dropped groups along with the acked rows.
 struct Collected: Sendable {
@@ -51,6 +57,13 @@ struct SyncStore: Sendable {
         try Int.fetchOne(db, sql: "SELECT value FROM _meta WHERE key = 'cursor'") ?? 0
     }
 
+    /// A paged snapshot in progress, else nil: `after` and `snapshot_head` in `_meta` are written and cleared together.
+    func snapshot(_ db: Database) throws -> SnapshotProgress? {
+        guard let after = try meta("after", db) else { return nil }
+        let head = try Int.fetchOne(db, sql: "SELECT value FROM _meta WHERE key = 'snapshot_head'") ?? 0
+        return SnapshotProgress(after: try JSONDecoder().decode(After.self, from: Data(after.utf8)), head: head)
+    }
+
     func collect(_ db: Database) throws -> Collected {
         let rows = try Row.fetchAll(db, sql: "SELECT seq, \"table\", id, op, col FROM _outbox ORDER BY seq").map {
             OutboxRow(seq: $0["seq"], table: $0["table"], id: $0["id"], op: $0["op"], col: $0["col"])
@@ -99,7 +112,8 @@ struct SyncStore: Sendable {
     func apply(_ response: SyncResponse, acked: Int? = nil, _ db: Database) throws {
         let acked = acked ?? response.acked
         try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 1)")
-        if response.snapshot {
+        let progress = try snapshot(db)
+        if response.snapshot, progress == nil {
             for table in schema.tables {
                 try db.execute(
                     sql: "DELETE FROM \"\(table.name)\" WHERE id NOT IN (SELECT id FROM _outbox WHERE \"table\" = ? AND seq > ?)",
@@ -130,7 +144,18 @@ struct SyncStore: Sendable {
             )
         }
         try db.execute(sql: "DELETE FROM _outbox WHERE seq <= ?", arguments: [acked])
-        try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('cursor', ?), ('applying', 0)", arguments: [response.head])
+        let head = progress?.head ?? response.head
+        if let next = response.next {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            let after = String(decoding: try encoder.encode(next), as: UTF8.self)
+            try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('after', ?), ('snapshot_head', ?)", arguments: [after, head])
+        } else {
+            // The first page's head: rows that changed while later pages were fetched come with the next delta.
+            try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('cursor', ?)", arguments: [head])
+            try db.execute(sql: "DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')")
+        }
+        try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 0)")
     }
 }
 
