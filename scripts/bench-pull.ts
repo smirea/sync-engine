@@ -1,5 +1,5 @@
 /**
- * Measures what a snapshot pull costs on a space with many rows and many tombstones:
+ * Measures what a snapshot pull costs on a space with many rows and many tombstones, before and after compaction:
  * `bun scripts/bench-pull.ts [rows] [tombstones]` (defaults 5000 and 20000, split over two tables).
  */
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
@@ -21,7 +21,9 @@ const values = (table: string, i: number): Values =>
 	table === 'items' ? { name: `item ${i}`, qty: i % 7 } : { kind: `kind ${i % 5}`, at: i };
 
 const driver = bunSqlite(':memory:');
-const space = createSpace(driver, schema);
+// Seeded at time 0 and compacted at the present, so every seeded write is older than the retention.
+const clock = { now: 0 };
+const space = createSpace(driver, schema, { now: () => clock.now });
 space.migrate();
 
 let seq = 0;
@@ -55,7 +57,17 @@ const timed = (label: string, run: () => SyncResponse) => {
 	);
 };
 
+function report() {
+	console.log(`_changes ${count('_changes')} rows, _log ${count('_log')} rows`);
+	timed('cursor 0, protocol 1', () => space.sync({ protocol: 1, client: 'bench', cursor: 0, writes: [] }));
+	timed('cursor 0, protocol 2 page', () => space.sync({ protocol: 2, client: 'bench', cursor: 0, writes: [] }));
+	timed(`cursor ${rows}`, () => space.sync({ protocol: 2, client: 'bench', cursor: rows, writes: [] }));
+}
+
 console.log(`seeded ${rows} rows and ${tombstones} tombstones, head ${space.head()}`);
-console.log(`_changes ${count('_changes')} rows, _log ${count('_log')} rows`);
-timed('cursor 0', () => space.sync({ protocol: 1, client: 'bench', cursor: 0, writes: [] }));
-timed(`cursor ${rows}`, () => space.sync({ protocol: 1, client: 'bench', cursor: rows, writes: [] }));
+report();
+clock.now = Date.now();
+const start = performance.now();
+const horizon = space.compact();
+console.log(`compact(): horizon ${horizon} in ${(performance.now() - start).toFixed(1)} ms`);
+report();
