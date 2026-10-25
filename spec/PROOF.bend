@@ -47,44 +47,44 @@ def skip_after_set(clients: S.NMap<Nat>, +client: Nat, +seq: Nat) -> {True{} == 
   Nat.le_refl(seq)
 
 # a state whose client entry already holds seq skips the same write
-def apply_skips(+rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +client: Nat, +seq: Nat, op: S.Op, +table: Nat, +id: Nat) -> {S.apply(S.State{rows, head, changes, S.NMap.set(Nat, clients, client, seq)}, S.Write{client, seq, op, table, id}) == S.State{rows, head, changes, S.NMap.set(Nat, clients, client, seq)} : S.State}:
-  %skip_after_set(clients, client, seq) : {S.apply.go(_, op, S.RowKey{table, id}, rows, head, changes, S.NMap.set(Nat, clients, client, seq), client, seq) == S.State{rows, head, changes, S.NMap.set(Nat, clients, client, seq)} : S.State}
+def apply_skips(+rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat, op: S.Op, +table: Nat, +id: Nat) -> {S.apply(S.State{rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon}, S.Write{client, seq, op, table, id}) == S.State{rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon} : S.State}:
+  %skip_after_set(clients, client, seq) : {S.apply.go(_, op, S.RowKey{table, id}, rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon, client, seq) == S.State{rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon} : S.State}
   {==}
 
-def idem.patch(cur: Maybe<&2, S.NMap<Nat>>, +cols: S.NMap<Nat>, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +client: Nat, +seq: Nat, +table: Nat, +id: Nat) -> {S.apply(S.apply.patch(cur, cols, S.RowKey{table, id}, rows, head, changes, S.NMap.set(Nat, clients, client, seq)), S.Write{client, seq, S.Patch{cols}, table, id}) == S.apply.patch(cur, cols, S.RowKey{table, id}, rows, head, changes, S.NMap.set(Nat, clients, client, seq)) : S.State}:
+def idem.patch(cur: Maybe<&2, S.NMap<Nat>>, +cols: S.NMap<Nat>, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat, +table: Nat, +id: Nat) -> {S.apply(S.apply.patch(cur, cols, S.RowKey{table, id}, rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon), S.Write{client, seq, S.Patch{cols}, table, id}) == S.apply.patch(cur, cols, S.RowKey{table, id}, rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon) : S.State}:
   match cur:
     case None{}:
-      apply_skips(rows, head, changes, clients, client, seq, S.Patch{cols}, table, id)
+      apply_skips(rows, head, changes, clients, horizon, client, seq, S.Patch{cols}, table, id)
     case Some{+row}:
-      apply_skips(S.KMap.set(S.NMap<Nat>, rows, S.RowKey{table, id}, S.NMap.merge(Nat, cols, row)), 1n+head, S.KMap.set(Nat, changes, S.RowKey{table, id}, 1n+head), clients, client, seq, S.Patch{cols}, table, id)
+      apply_skips(S.KMap.set(S.NMap<Nat>, rows, S.RowKey{table, id}, S.NMap.merge(Nat, cols, row)), 1n+head, S.KMap.set(Nat, changes, S.RowKey{table, id}, 1n+head), clients, horizon, client, seq, S.Patch{cols}, table, id)
 
-def idem.go(b: Bool, +op: S.Op, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +client: Nat, +seq: Nat, +table: Nat, +id: Nat, +e: {b == Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)) : Bool}) -> {S.apply(S.apply.go(b, op, S.RowKey{table, id}, rows, head, changes, clients, client, seq), S.Write{client, seq, op, table, id}) == S.apply.go(b, op, S.RowKey{table, id}, rows, head, changes, clients, client, seq) : S.State}:
+def idem.go(b: Bool, +op: S.Op, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat, +table: Nat, +id: Nat, +e: {b == Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)) : Bool}) -> {S.apply(S.apply.go(b, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq), S.Write{client, seq, op, table, id}) == S.apply.go(b, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq) : S.State}:
   match b:
     case True{}:
-      %e : {S.apply.go(_, op, S.RowKey{table, id}, rows, head, changes, clients, client, seq) == S.State{rows, head, changes, clients} : S.State}
+      %e : {S.apply.go(_, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq) == S.State{rows, head, changes, clients, horizon} : S.State}
       {==}
     case False{}:
       match op:
         case S.Put{+row}:
-          apply_skips(S.KMap.set(S.NMap<Nat>, rows, S.RowKey{table, id}, row), 1n+head, S.KMap.set(Nat, changes, S.RowKey{table, id}, 1n+head), clients, client, seq, S.Put{row}, table, id)
+          apply_skips(S.KMap.set(S.NMap<Nat>, rows, S.RowKey{table, id}, row), 1n+head, S.KMap.set(Nat, changes, S.RowKey{table, id}, 1n+head), clients, horizon, client, seq, S.Put{row}, table, id)
         case S.Patch{+cols}:
-          idem.patch(S.KMap.lookup(S.NMap<Nat>, rows, S.RowKey{table, id}), cols, rows, head, changes, clients, client, seq, table, id)
+          idem.patch(S.KMap.lookup(S.NMap<Nat>, rows, S.RowKey{table, id}), cols, rows, head, changes, clients, horizon, client, seq, table, id)
         case S.Delete{}:
-          apply_skips(S.KMap.del(S.NMap<Nat>, rows, S.RowKey{table, id}), 1n+head, S.KMap.set(Nat, changes, S.RowKey{table, id}, 1n+head), clients, client, seq, S.Delete{}, table, id)
+          apply_skips(S.KMap.del(S.NMap<Nat>, rows, S.RowKey{table, id}), 1n+head, S.KMap.set(Nat, changes, S.RowKey{table, id}, 1n+head), clients, horizon, client, seq, S.Delete{}, table, id)
 
 def Laws.replay_idempotent(s, w):
   match s w:
-    case S.State{+rows, +head, +changes, +clients} S.Write{+client, +seq, +op, +table, +id}:
-      idem.go(Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)), op, rows, head, changes, clients, client, seq, table, id, {==})
+    case S.State{+rows, +head, +changes, +clients, +horizon} S.Write{+client, +seq, +op, +table, +id}:
+      idem.go(Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)), op, rows, head, changes, clients, horizon, client, seq, table, id, {==})
 
-def mono.patch(cur: Maybe<&2, S.NMap<Nat>>, cols: S.NMap<Nat>, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, changes: S.KMap<Nat>, clients: S.NMap<Nat>) -> {True{} == Nat.is_ge(S.State.head(S.apply.patch(cur, cols, key, rows, head, changes, clients)), head) : Bool}:
+def mono.patch(cur: Maybe<&2, S.NMap<Nat>>, cols: S.NMap<Nat>, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, changes: S.KMap<Nat>, clients: S.NMap<Nat>, horizon: Nat) -> {True{} == Nat.is_ge(S.State.head(S.apply.patch(cur, cols, key, rows, head, changes, clients, horizon)), head) : Bool}:
   match cur:
     case None{}:
       Equal.sym(Bool, Nat.is_ge(head, head), True{}, Nat.ge_refl(head))
     case Some{row}:
       Nat.ge_succ(head)
 
-def mono.go(b: Bool, op: S.Op, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, changes: S.KMap<Nat>, clients: S.NMap<Nat>, +client: Nat, +seq: Nat) -> {True{} == Nat.is_ge(S.State.head(S.apply.go(b, op, key, rows, head, changes, clients, client, seq)), head) : Bool}:
+def mono.go(b: Bool, op: S.Op, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, changes: S.KMap<Nat>, clients: S.NMap<Nat>, horizon: Nat, +client: Nat, +seq: Nat) -> {True{} == Nat.is_ge(S.State.head(S.apply.go(b, op, key, rows, head, changes, clients, horizon, client, seq)), head) : Bool}:
   match b:
     case True{}:
       Equal.sym(Bool, Nat.is_ge(head, head), True{}, Nat.ge_refl(head))
@@ -93,14 +93,14 @@ def mono.go(b: Bool, op: S.Op, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: N
         case S.Put{row}:
           Nat.ge_succ(head)
         case S.Patch{cols}:
-          mono.patch(S.KMap.lookup(S.NMap<Nat>, rows, key), cols, key, rows, head, changes, S.NMap.set(Nat, clients, client, seq))
+          mono.patch(S.KMap.lookup(S.NMap<Nat>, rows, key), cols, key, rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon)
         case S.Delete{}:
           Nat.ge_succ(head)
 
 def Laws.head_monotonic(s, w):
   match s w:
-    case S.State{+rows, +head, changes, clients} S.Write{+client, +seq, op, table, id}:
-      Equal.sym(Bool, True{}, Nat.is_ge(S.State.head(S.apply(s, w)), head), mono.go(Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)), op, S.RowKey{table, id}, rows, head, changes, clients, client, seq))
+    case S.State{+rows, +head, changes, clients, +horizon} S.Write{+client, +seq, op, table, id}:
+      Equal.sym(Bool, True{}, Nat.is_ge(S.State.head(S.apply(s, w)), head), mono.go(Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)), op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq))
 
 
 def Bool.disc_tf(b: Bool, A: Type) -> Type:
@@ -318,10 +318,58 @@ def conv.go(changes: S.KMap<Nat>, +rows: S.KMap<S.NMap<Nat>>, +local: S.KMap<S.N
     case S.KCon{+key, +stamp, +rest}:
       conv.step(rest, rows, local, cursor, k, key, stamp, Nat.is_gt(stamp, cursor), {==}, S.Key.eq(key, k), {==}, inv, local2 => inv2 => conv.go(rest, rows, local2, cursor, k, inv2))
 
+# below the horizon (or at cursor 0) the pull is the rows themselves; above it the delta argument applies
+def conv.pick(b: Bool, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +local: S.KMap<S.NMap<Nat>>, +cursor: Nat, +k: S.Key, inv: {True{} == Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor) : Bool} -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}) -> {S.KMap.lookup(S.NMap<Nat>, S.Client.local(S.applyPull(S.Client{local, cursor}, S.pull.pick(b, rows, head, changes, cursor))), k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}:
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      conv.go(changes, rows, local, cursor, k, inv)
+
 def Laws.converge(s, c, k, inv):
   match s c:
-    case S.State{+rows, head, +changes, clients} S.Client{+local, +cursor}:
-      conv.go(changes, rows, local, cursor, k, inv)
+    case S.State{+rows, +head, +changes, clients, +horizon} S.Client{+local, +cursor}:
+      conv.pick(Bool.or(Nat.is_eq(cursor, 0n), Nat.is_lt(cursor, horizon)), rows, head, changes, local, cursor, k, inv)
+
+def Bool.or_r(x: Bool, +y: Bool, e: {False{} == Bool.or(x, y) : Bool}) -> {False{} == y : Bool}:
+  match x:
+    case True{}:
+      Bool.absurd_ft({False{} == y : Bool}, e)
+    case False{}:
+      e
+
+def Nat.not_lt_le(a: Nat, b: Nat, e: {False{} == Nat.is_lt(a, b) : Bool}) -> {True{} == Nat.is_le(b, a) : Bool}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      Bool.absurd_ft({True{} == Nat.is_le(1n+q, 0n) : Bool}, e)
+    case 1n+p 0n:
+      {==}
+    case 1n+p 1n+q:
+      Nat.not_lt_le(p, q, e)
+
+def conv.pick2(b: Bool, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +horizon: Nat, +local: S.KMap<S.NMap<Nat>>, +cursor: Nat, +k: S.Key, +e: {b == Bool.or(Nat.is_eq(cursor, 0n), Nat.is_lt(cursor, horizon)) : Bool}, inv: {True{} == Nat.is_le(horizon, cursor) : Bool} -> {True{} == Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor) : Bool} -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}) -> {S.KMap.lookup(S.NMap<Nat>, S.Client.local(S.applyPull(S.Client{local, cursor}, S.pull.pick(b, rows, head, changes, cursor))), k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}:
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      conv.go(changes, rows, local, cursor, k, inv(Nat.not_lt_le(cursor, horizon, Bool.or_r(Nat.is_eq(cursor, 0n), Nat.is_lt(cursor, horizon), e))))
+
+def Laws.converge_compacted(s, c, k, inv):
+  match s c:
+    case S.State{+rows, +head, +changes, clients, +horizon} S.Client{+local, +cursor}:
+      conv.pick2(Bool.or(Nat.is_eq(cursor, 0n), Nat.is_lt(cursor, horizon)), rows, head, changes, horizon, local, cursor, k, {==}, inv)
+
+def Laws.compact_rows(s, h):
+  match s:
+    case S.State{+rows, head, changes, clients, +horizon}:
+      {==}
+
+def Laws.compact_head(s, h):
+  match s:
+    case S.State{rows, +head, changes, clients, +horizon}:
+      {==}
 
 
 def Nat.le_succ_absurd(-A: Type, c: Nat, h: Nat, le: {True{} == Nat.is_le(c, h) : Bool}, h2: {True{} == Nat.is_le(1n+h, c) : Bool}) -> A:
@@ -389,14 +437,14 @@ def pres.core(+rows: S.KMap<S.NMap<Nat>>, +rows2: S.KMap<S.NMap<Nat>>, +changes:
       %miss(eb) : {S.KMap.lookup(S.NMap<Nat>, local, k) == _ : Maybe<&2, S.NMap<Nat>>}
       inv(Equal.trans(Bool, True{}, Nat.is_le(S.KMap.get(Nat, S.KMap.set(Nat, changes, K, 1n+head), k, 0n), cursor), Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor), h, Equal.cong(Nat, Bool, x => Nat.is_le(x, cursor), S.KMap.get(Nat, S.KMap.set(Nat, changes, K, 1n+head), k, 0n), S.KMap.get(Nat, changes, k, 0n), KMap.get_set_miss(Nat, changes, K, k, 1n+head, 0n, eb))))
 
-def pres.patch(cur: Maybe<&2, S.NMap<Nat>>, +cols: S.NMap<Nat>, +K: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +local: S.KMap<S.NMap<Nat>>, +cursor: Nat, +k: S.Key, +le: {True{} == Nat.is_le(cursor, head) : Bool}, inv: {True{} == Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor) : Bool} -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}, h: {True{} == Nat.is_le(S.KMap.get(Nat, S.State.changes(S.apply.patch(cur, cols, K, rows, head, changes, clients)), k, 0n), cursor) : Bool}) -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, S.State.rows(S.apply.patch(cur, cols, K, rows, head, changes, clients)), k) : Maybe<&2, S.NMap<Nat>>}:
+def pres.patch(cur: Maybe<&2, S.NMap<Nat>>, +cols: S.NMap<Nat>, +K: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +local: S.KMap<S.NMap<Nat>>, +cursor: Nat, +k: S.Key, +le: {True{} == Nat.is_le(cursor, head) : Bool}, inv: {True{} == Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor) : Bool} -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}, h: {True{} == Nat.is_le(S.KMap.get(Nat, S.State.changes(S.apply.patch(cur, cols, K, rows, head, changes, clients, horizon)), k, 0n), cursor) : Bool}) -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, S.State.rows(S.apply.patch(cur, cols, K, rows, head, changes, clients, horizon)), k) : Maybe<&2, S.NMap<Nat>>}:
   match cur:
     case None{}:
       inv(h)
     case Some{+row}:
       pres.core(rows, S.KMap.set(S.NMap<Nat>, rows, K, S.NMap.merge(Nat, cols, row)), changes, K, head, cursor, k, local, S.Key.eq(K, k), {==}, le, e => KMap.lookup_set_miss(rows, K, k, S.NMap.merge(Nat, cols, row), e), inv, h)
 
-def pres.go(b: Bool, +op: S.Op, +K: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +client: Nat, +seq: Nat, +local: S.KMap<S.NMap<Nat>>, +cursor: Nat, +k: S.Key, +le: {True{} == Nat.is_le(cursor, head) : Bool}, inv: {True{} == Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor) : Bool} -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}, h: {True{} == Nat.is_le(S.KMap.get(Nat, S.State.changes(S.apply.go(b, op, K, rows, head, changes, clients, client, seq)), k, 0n), cursor) : Bool}) -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, S.State.rows(S.apply.go(b, op, K, rows, head, changes, clients, client, seq)), k) : Maybe<&2, S.NMap<Nat>>}:
+def pres.go(b: Bool, +op: S.Op, +K: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat, +local: S.KMap<S.NMap<Nat>>, +cursor: Nat, +k: S.Key, +le: {True{} == Nat.is_le(cursor, head) : Bool}, inv: {True{} == Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor) : Bool} -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}, h: {True{} == Nat.is_le(S.KMap.get(Nat, S.State.changes(S.apply.go(b, op, K, rows, head, changes, clients, horizon, client, seq)), k, 0n), cursor) : Bool}) -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, S.State.rows(S.apply.go(b, op, K, rows, head, changes, clients, horizon, client, seq)), k) : Maybe<&2, S.NMap<Nat>>}:
   match b:
     case True{}:
       inv(h)
@@ -405,11 +453,228 @@ def pres.go(b: Bool, +op: S.Op, +K: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Na
         case S.Put{+row}:
           pres.core(rows, S.KMap.set(S.NMap<Nat>, rows, K, row), changes, K, head, cursor, k, local, S.Key.eq(K, k), {==}, le, e => KMap.lookup_set_miss(rows, K, k, row, e), inv, h)
         case S.Patch{+cols}:
-          pres.patch(S.KMap.lookup(S.NMap<Nat>, rows, K), cols, K, rows, head, changes, S.NMap.set(Nat, clients, client, seq), local, cursor, k, le, inv, h)
+          pres.patch(S.KMap.lookup(S.NMap<Nat>, rows, K), cols, K, rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon, local, cursor, k, le, inv, h)
         case S.Delete{}:
           pres.core(rows, S.KMap.del(S.NMap<Nat>, rows, K), changes, K, head, cursor, k, local, S.Key.eq(K, k), {==}, le, e => KMap.lookup_del_miss(rows, K, k, e), inv, h)
 
 def Laws.inv_preserved(s, w, local, cursor, k, le, inv, h):
   match s w:
-    case S.State{+rows, +head, +changes, +clients} S.Write{+client, +seq, +op, +table, +id}:
-      pres.go(Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)), op, S.RowKey{table, id}, rows, head, changes, clients, client, seq, local, cursor, k, le, inv, h)
+    case S.State{+rows, +head, +changes, +clients, +horizon} S.Write{+client, +seq, +op, +table, +id}:
+      pres.go(Nat.is_le(seq, S.NMap.get(Nat, clients, client, 0n)), op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq, local, cursor, k, le, inv, h)
+
+
+def Nat.lt_asym(a: Nat, b: Nat, e: {True{} == Nat.is_lt(a, b) : Bool}) -> {False{} == Nat.is_lt(b, a) : Bool}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      {==}
+    case 1n+p 0n:
+      Bool.absurd_tf({False{} == Nat.is_lt(0n, 1n+p) : Bool}, e)
+    case 1n+p 1n+q:
+      Nat.lt_asym(p, q, e)
+
+def Nat.lt_total(a: Nat, b: Nat, ne: {False{} == Nat.is_eq(a, b) : Bool}, e: {False{} == Nat.is_lt(a, b) : Bool}) -> {True{} == Nat.is_lt(b, a) : Bool}:
+  match a b:
+    case 0n 0n:
+      Bool.absurd_ft({True{} == Nat.is_lt(0n, 0n) : Bool}, ne)
+    case 0n 1n+q:
+      Bool.absurd_ft({True{} == Nat.is_lt(1n+q, 0n) : Bool}, e)
+    case 1n+p 0n:
+      {==}
+    case 1n+p 1n+q:
+      Nat.lt_total(p, q, ne, e)
+
+def Nat.lt_le_trans(a: Nat, b: Nat, c: Nat, e1: {True{} == Nat.is_lt(a, b) : Bool}, e2: {True{} == Nat.is_le(b, c) : Bool}) -> {True{} == Nat.is_lt(a, c) : Bool}:
+  match a b c:
+    case 0n 0n c:
+      Bool.absurd_tf({True{} == Nat.is_lt(0n, c) : Bool}, e1)
+    case 0n 1n+q 0n:
+      Bool.absurd_tf({True{} == Nat.is_lt(0n, 0n) : Bool}, e2)
+    case 0n 1n+q 1n+r:
+      {==}
+    case 1n+p 0n c:
+      Bool.absurd_tf({True{} == Nat.is_lt(1n+p, c) : Bool}, e1)
+    case 1n+p 1n+q 0n:
+      Bool.absurd_tf({True{} == Nat.is_lt(1n+p, 0n) : Bool}, e2)
+    case 1n+p 1n+q 1n+r:
+      Nat.lt_le_trans(p, q, r, e1, e2)
+
+def Nat.gt_lt(a: Nat, b: Nat, e: {True{} == Nat.is_gt(a, b) : Bool}) -> {True{} == Nat.is_lt(b, a) : Bool}:
+  match a b:
+    case 0n 0n:
+      Bool.absurd_tf({True{} == Nat.is_lt(0n, 0n) : Bool}, e)
+    case 0n 1n+q:
+      Bool.absurd_tf({True{} == Nat.is_lt(1n+q, 0n) : Bool}, e)
+    case 1n+p 0n:
+      {==}
+    case 1n+p 1n+q:
+      Nat.gt_lt(p, q, e)
+
+def Nat.gt_not_le(a: Nat, b: Nat, e: {True{} == Nat.is_gt(a, b) : Bool}) -> {False{} == Nat.is_le(a, b) : Bool}:
+  match a b:
+    case 0n 0n:
+      Bool.absurd_tf({False{} == Nat.is_le(0n, 0n) : Bool}, e)
+    case 0n 1n+q:
+      Bool.absurd_tf({False{} == Nat.is_le(0n, 1n+q) : Bool}, e)
+    case 1n+p 0n:
+      {==}
+    case 1n+p 1n+q:
+      Nat.gt_not_le(p, q, e)
+
+# insertion takes the head when the new seq is smaller, else skips it
+def ins_lt(+a: S.Write, +x: S.Write, +rest: List<&2, S.Write>, +e: {True{} == Nat.is_lt(S.Write.seq(a), S.Write.seq(x)) : Bool}) -> {a <> (x <> rest) == S.insert(a, x <> rest) : List<&2, S.Write>}:
+  %e : {a <> (x <> rest) == S.KMap.if(List<&2, S.Write>, a <> (x <> rest), x <> S.insert(a, rest), _) : List<&2, S.Write>}
+  {==}
+
+def ins_ge(+a: S.Write, +x: S.Write, +rest: List<&2, S.Write>, +e: {False{} == Nat.is_lt(S.Write.seq(a), S.Write.seq(x)) : Bool}) -> {x <> S.insert(a, rest) == S.insert(a, x <> rest) : List<&2, S.Write>}:
+  %e : {x <> S.insert(a, rest) == S.KMap.if(List<&2, S.Write>, a <> (x <> rest), x <> S.insert(a, rest), _) : List<&2, S.Write>}
+  {==}
+
+# two writes with different seqs land in seq order whichever is inserted first
+def ic.nil(g: Bool, +a: S.Write, +b: S.Write, +e: {g == Nat.is_lt(S.Write.seq(a), S.Write.seq(b)) : Bool}, +ne: {False{} == Nat.is_eq(S.Write.seq(a), S.Write.seq(b)) : Bool}) -> {S.insert(a, S.insert(b, Nil{})) == S.insert(b, S.insert(a, Nil{})) : List<&2, S.Write>}:
+  match g:
+    case True{}:
+      %ins_lt(a, b, Nil{}, e) : {_ == S.insert(b, S.insert(a, Nil{})) : List<&2, S.Write>}
+      %ins_ge(b, a, Nil{}, Nat.lt_asym(S.Write.seq(a), S.Write.seq(b), e)) : {a <> (b <> Nil{}) == _ : List<&2, S.Write>}
+      {==}
+    case False{}:
+      %ins_ge(a, b, Nil{}, e) : {_ == S.insert(b, S.insert(a, Nil{})) : List<&2, S.Write>}
+      %ins_lt(b, a, Nil{}, Nat.lt_total(S.Write.seq(a), S.Write.seq(b), ne, e)) : {b <> S.insert(a, Nil{}) == _ : List<&2, S.Write>}
+      {==}
+
+def ic.top(g: Bool, +a: S.Write, +b: S.Write, +x: S.Write, +rest: List<&2, S.Write>, +e: {g == Nat.is_lt(S.Write.seq(a), S.Write.seq(b)) : Bool}, +e1: {True{} == Nat.is_lt(S.Write.seq(a), S.Write.seq(x)) : Bool}, +e2: {True{} == Nat.is_lt(S.Write.seq(b), S.Write.seq(x)) : Bool}, +ne: {False{} == Nat.is_eq(S.Write.seq(a), S.Write.seq(b)) : Bool}) -> {S.insert(a, b <> (x <> rest)) == S.insert(b, a <> (x <> rest)) : List<&2, S.Write>}:
+  match g:
+    case True{}:
+      %ins_lt(a, b, x <> rest, e) : {_ == S.insert(b, a <> (x <> rest)) : List<&2, S.Write>}
+      %ins_ge(b, a, x <> rest, Nat.lt_asym(S.Write.seq(a), S.Write.seq(b), e)) : {a <> (b <> (x <> rest)) == _ : List<&2, S.Write>}
+      %ins_lt(b, x, rest, e2) : {a <> (b <> (x <> rest)) == a <> _ : List<&2, S.Write>}
+      {==}
+    case False{}:
+      %ins_ge(a, b, x <> rest, e) : {_ == S.insert(b, a <> (x <> rest)) : List<&2, S.Write>}
+      %ins_lt(a, x, rest, e1) : {b <> _ == S.insert(b, a <> (x <> rest)) : List<&2, S.Write>}
+      %ins_lt(b, a, x <> rest, Nat.lt_total(S.Write.seq(a), S.Write.seq(b), ne, e)) : {b <> (a <> (x <> rest)) == _ : List<&2, S.Write>}
+      {==}
+
+def ic.step(g1: Bool, g2: Bool, +a: S.Write, +b: S.Write, +x: S.Write, +rest: List<&2, S.Write>, +e1: {g1 == Nat.is_lt(S.Write.seq(a), S.Write.seq(x)) : Bool}, +e2: {g2 == Nat.is_lt(S.Write.seq(b), S.Write.seq(x)) : Bool}, +ne: {False{} == Nat.is_eq(S.Write.seq(a), S.Write.seq(b)) : Bool}, ih: {S.insert(a, S.insert(b, rest)) == S.insert(b, S.insert(a, rest)) : List<&2, S.Write>}) -> {S.insert(a, S.insert(b, x <> rest)) == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}:
+  match g1 g2:
+    case True{} True{}:
+      %ins_lt(b, x, rest, e2) : {S.insert(a, _) == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_lt(a, x, rest, e1) : {S.insert(a, b <> (x <> rest)) == S.insert(b, _) : List<&2, S.Write>}
+      ic.top(Nat.is_lt(S.Write.seq(a), S.Write.seq(b)), a, b, x, rest, {==}, e1, e2, ne)
+    case True{} False{}:
+      %ins_ge(b, x, rest, e2) : {S.insert(a, _) == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_lt(a, x, S.insert(b, rest), e1) : {_ == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_lt(a, x, rest, e1) : {a <> (x <> S.insert(b, rest)) == S.insert(b, _) : List<&2, S.Write>}
+      %ins_ge(b, a, x <> rest, Nat.lt_asym(S.Write.seq(a), S.Write.seq(b), Nat.lt_le_trans(S.Write.seq(a), S.Write.seq(x), S.Write.seq(b), e1, Nat.not_lt_le(S.Write.seq(b), S.Write.seq(x), e2)))) : {a <> (x <> S.insert(b, rest)) == _ : List<&2, S.Write>}
+      %ins_ge(b, x, rest, e2) : {a <> (x <> S.insert(b, rest)) == a <> _ : List<&2, S.Write>}
+      {==}
+    case False{} True{}:
+      %ins_lt(b, x, rest, e2) : {S.insert(a, _) == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_ge(a, b, x <> rest, Nat.lt_asym(S.Write.seq(b), S.Write.seq(a), Nat.lt_le_trans(S.Write.seq(b), S.Write.seq(x), S.Write.seq(a), e2, Nat.not_lt_le(S.Write.seq(a), S.Write.seq(x), e1)))) : {_ == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_ge(a, x, rest, e1) : {b <> _ == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_ge(a, x, rest, e1) : {b <> (x <> S.insert(a, rest)) == S.insert(b, _) : List<&2, S.Write>}
+      %ins_lt(b, x, S.insert(a, rest), e2) : {b <> (x <> S.insert(a, rest)) == _ : List<&2, S.Write>}
+      {==}
+    case False{} False{}:
+      %ins_ge(b, x, rest, e2) : {S.insert(a, _) == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_ge(a, x, S.insert(b, rest), e1) : {_ == S.insert(b, S.insert(a, x <> rest)) : List<&2, S.Write>}
+      %ins_ge(a, x, rest, e1) : {x <> S.insert(a, S.insert(b, rest)) == S.insert(b, _) : List<&2, S.Write>}
+      %ins_ge(b, x, S.insert(a, rest), e2) : {x <> S.insert(a, S.insert(b, rest)) == _ : List<&2, S.Write>}
+      %ih : {x <> S.insert(a, S.insert(b, rest)) == x <> _ : List<&2, S.Write>}
+      {==}
+
+def insert_comm(l: List<&2, S.Write>, +a: S.Write, +b: S.Write, +ne: {False{} == Nat.is_eq(S.Write.seq(a), S.Write.seq(b)) : Bool}) -> {S.insert(a, S.insert(b, l)) == S.insert(b, S.insert(a, l)) : List<&2, S.Write>}:
+  match l:
+    case Nil{}:
+      ic.nil(Nat.is_lt(S.Write.seq(a), S.Write.seq(b)), a, b, {==}, ne)
+    case Con{+x, +rest}:
+      ic.step(Nat.is_lt(S.Write.seq(a), S.Write.seq(x)), Nat.is_lt(S.Write.seq(b), S.Write.seq(x)), a, b, x, rest, {==}, {==}, ne, insert_comm(rest, a, b, ne))
+
+def sort_swap(xs: List<&2, S.Write>, +a: S.Write, +b: S.Write, +ys: List<&2, S.Write>, +ne: {False{} == Nat.is_eq(S.Write.seq(a), S.Write.seq(b)) : Bool}) -> {S.sortBySeq(List.append(&2, S.Write, xs, a <> (b <> ys))) == S.sortBySeq(List.append(&2, S.Write, xs, b <> (a <> ys))) : List<&2, S.Write>}:
+  match xs:
+    case Nil{}:
+      insert_comm(S.sortBySeq(ys), a, b, ne)
+    case Con{+x, rest}:
+      %sort_swap(rest, a, b, ys, ne) : {S.insert(x, S.sortBySeq(List.append(&2, S.Write, rest, a <> (b <> ys)))) == S.insert(x, _) : List<&2, S.Write>}
+      {==}
+
+def Laws.batch_order(s, xs, a, b, ys, ne):
+  %sort_swap(xs, a, b, ys, ne) : {S.applyAll(S.sortBySeq(List.append(&2, S.Write, xs, a <> (b <> ys))), s) == S.applyAll(_, s) : S.State}
+  {==}
+
+# an ascending batch is its own sort
+def sort_asc.head(rest: List<&2, S.Write>, +client: Nat, +seq: Nat, +op: S.Op, +table: Nat, +id: Nat, +c: Nat, +asc: {True{} == S.Asc(rest, seq, c) : Bool}) -> {S.Write{client, seq, op, table, id} <> rest == S.insert(S.Write{client, seq, op, table, id}, rest) : List<&2, S.Write>}:
+  match rest:
+    case Nil{}:
+      {==}
+    case Con{S.Write{+xc, +xs, +xo, +xt, +xi}, +rest2}:
+      ins_lt(S.Write{client, seq, op, table, id}, S.Write{xc, xs, xo, xt, xi}, rest2, Nat.gt_lt(xs, seq, Bool.and_r(Nat.is_eq(xc, c), Nat.is_gt(xs, seq), Bool.and_l(Bool.and(Nat.is_eq(xc, c), Nat.is_gt(xs, seq)), S.Asc(rest2, xs, c), asc))))
+
+def sort_asc(ws: List<&2, S.Write>, +n: Nat, +c: Nat, +asc: {True{} == S.Asc(ws, n, c) : Bool}) -> {ws == S.sortBySeq(ws) : List<&2, S.Write>}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{S.Write{+client, +seq, +op, +table, +id}, +rest}:
+      %sort_asc(rest, seq, c, Bool.and_r(Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)), S.Asc(rest, seq, c), asc)) : {S.Write{client, seq, op, table, id} <> rest == S.insert(S.Write{client, seq, op, table, id}, _) : List<&2, S.Write>}
+      sort_asc.head(rest, client, seq, op, table, id, c, Bool.and_r(Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)), S.Asc(rest, seq, c), asc))
+
+# a write above the client's entry passes the replay guard
+def apply_fresh(+rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat, +op: S.Op, +table: Nat, +id: Nat, +gt: {True{} == Nat.is_gt(seq, S.NMap.get(Nat, clients, client, 0n)) : Bool}) -> {S.apply.force(S.State{rows, head, changes, clients, horizon}, S.Write{client, seq, op, table, id}) == S.apply(S.State{rows, head, changes, clients, horizon}, S.Write{client, seq, op, table, id}) : S.State}:
+  %Nat.gt_not_le(seq, S.NMap.get(Nat, clients, client, 0n), gt) : {S.apply.go(False{}, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq) == S.apply.go(_, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq) : S.State}
+  {==}
+
+# applying a write leaves the client table at the entry the guard set
+def force_clients.patch(cur: Maybe<&2, S.NMap<Nat>>, +cols: S.NMap<Nat>, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat) -> {clients == S.State.clients(S.apply.patch(cur, cols, key, rows, head, changes, clients, horizon)) : S.NMap<Nat>}:
+  match cur:
+    case None{}:
+      {==}
+    case Some{row}:
+      {==}
+
+def force_clients(op: S.Op, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat) -> {S.NMap.set(Nat, clients, client, seq) == S.State.clients(S.apply.go(False{}, op, key, rows, head, changes, clients, horizon, client, seq)) : S.NMap<Nat>}:
+  match op:
+    case S.Put{row}:
+      {==}
+    case S.Patch{+cols}:
+      force_clients.patch(S.KMap.lookup(S.NMap<Nat>, rows, key), cols, key, rows, head, changes, S.NMap.set(Nat, clients, client, seq), horizon)
+    case S.Delete{}:
+      {==}
+
+def batch.step(rest: List<&2, S.Write>, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat, +op: S.Op, +table: Nat, +id: Nat, +c: Nat, +n: Nat, +en: {n == S.NMap.get(Nat, clients, c, 0n) : Nat}, +hd: {True{} == Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)) : Bool}, +tl: {True{} == S.Asc(rest, seq, c) : Bool}, ih: @s2: S.State -> ({seq == S.NMap.get(Nat, S.State.clients(s2), c, 0n) : Nat} -> ({S.applyAll(rest, s2) == S.applyForce(rest, s2) : S.State} & {S.NMap.get(Nat, S.State.clients(S.applyForce(rest, s2)), c, 0n) == S.lastSeq(rest, seq) : Nat}))) -> {S.applyAll(S.Write{client, seq, op, table, id} <> rest, S.State{rows, head, changes, clients, horizon}) == S.applyForce(S.Write{client, seq, op, table, id} <> rest, S.State{rows, head, changes, clients, horizon}) : S.State} & {S.NMap.get(Nat, S.State.clients(S.applyForce(S.Write{client, seq, op, table, id} <> rest, S.State{rows, head, changes, clients, horizon})), c, 0n) == S.lastSeq(S.Write{client, seq, op, table, id} <> rest, n) : Nat}:
+  +eqc = Nat.eq_to_equal(client, c, Bool.and_l(Nat.is_eq(client, c), Nat.is_gt(seq, n), hd))
+  +gtc = Equal.trans(Bool, True{}, Nat.is_gt(seq, n), Nat.is_gt(seq, S.NMap.get(Nat, clients, client, 0n)), Bool.and_r(Nat.is_eq(client, c), Nat.is_gt(seq, n), hd), Equal.cong(Nat, Bool, x => Nat.is_gt(seq, x), n, S.NMap.get(Nat, clients, client, 0n), Equal.trans(Nat, n, S.NMap.get(Nat, clients, c, 0n), S.NMap.get(Nat, clients, client, 0n), en, Equal.cong(Nat, Nat, x => S.NMap.get(Nat, clients, x, 0n), c, client, eqc))))
+  +gsc = Equal.trans(Nat, seq, S.NMap.get(Nat, S.NMap.set(Nat, clients, client, seq), client, 0n), S.NMap.get(Nat, S.NMap.set(Nat, clients, client, seq), c, 0n), NMap.get_set(clients, client, seq, 0n), Equal.sym(Nat, S.NMap.get(Nat, S.NMap.set(Nat, clients, client, seq), c, 0n), S.NMap.get(Nat, S.NMap.set(Nat, clients, client, seq), client, 0n), Equal.cong(Nat, Nat, x => S.NMap.get(Nat, S.NMap.set(Nat, clients, client, seq), x, 0n), c, client, eqc)))
+  +en2 = Equal.trans(Nat, seq, S.NMap.get(Nat, S.NMap.set(Nat, clients, client, seq), c, 0n), S.NMap.get(Nat, S.State.clients(S.apply.go(False{}, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq)), c, 0n), gsc, Equal.cong(S.NMap<Nat>, Nat, m => S.NMap.get(Nat, m, c, 0n), S.NMap.set(Nat, clients, client, seq), S.State.clients(S.apply.go(False{}, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq)), force_clients(op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq)))
+  %apply_fresh(rows, head, changes, clients, horizon, client, seq, op, table, id, gtc) : {S.applyAll(rest, _) == S.applyForce(rest, S.apply.force(S.State{rows, head, changes, clients, horizon}, S.Write{client, seq, op, table, id})) : S.State} & {S.NMap.get(Nat, S.State.clients(S.applyForce(rest, S.apply.force(S.State{rows, head, changes, clients, horizon}, S.Write{client, seq, op, table, id}))), c, 0n) == S.lastSeq(rest, seq) : Nat}
+  ih(S.apply.force(S.State{rows, head, changes, clients, horizon}, S.Write{client, seq, op, table, id}), en2)
+
+def batch.go(ws: List<&2, S.Write>, s: S.State, +c: Nat, +n: Nat, +en: {n == S.NMap.get(Nat, S.State.clients(s), c, 0n) : Nat}, +asc: {True{} == S.Asc(ws, n, c) : Bool}) -> {S.applyAll(ws, s) == S.applyForce(ws, s) : S.State} & {S.NMap.get(Nat, S.State.clients(S.applyForce(ws, s)), c, 0n) == S.lastSeq(ws, n) : Nat}:
+  match ws:
+    case Nil{}:
+      ({==}, Equal.sym(Nat, n, S.NMap.get(Nat, S.State.clients(s), c, 0n), en))
+    case Con{S.Write{+client, +seq, +op, +table, +id}, +rest}:
+      match s:
+        case S.State{+rows, +head, +changes, +clients, +horizon}:
+          batch.step(rest, rows, head, changes, clients, horizon, client, seq, op, table, id, c, n, en, Bool.and_l(Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)), S.Asc(rest, seq, c), asc), Bool.and_r(Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)), S.Asc(rest, seq, c), asc), s2 => en2 => batch.go(rest, s2, c, seq, en2, Bool.and_r(Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)), S.Asc(rest, seq, c), asc)))
+
+def pair.fst(-A: Type, -B: Type, p: A & B) -> A:
+  (a, b) = p
+  a
+
+def pair.snd(-A: Type, -B: Type, p: A & B) -> B:
+  (a, b) = p
+  b
+
+def Laws.batch_complete(s, c, ws, asc):
+  %sort_asc(ws, S.NMap.get(Nat, S.State.clients(s), c, 0n), c, asc) : {S.applyAll(_, s) == S.applyForce(ws, s) : S.State}
+  pair.fst({S.applyAll(ws, s) == S.applyForce(ws, s) : S.State}, {S.NMap.get(Nat, S.State.clients(S.applyForce(ws, s)), c, 0n) == S.lastSeq(ws, S.NMap.get(Nat, S.State.clients(s), c, 0n)) : Nat}, batch.go(ws, s, c, S.NMap.get(Nat, S.State.clients(s), c, 0n), {==}, asc))
+
+def batch.acked(+s: S.State, +c: Nat, +ws: List<&2, S.Write>, r: {S.applyAll(ws, s) == S.applyForce(ws, s) : S.State} & {S.NMap.get(Nat, S.State.clients(S.applyForce(ws, s)), c, 0n) == S.lastSeq(ws, S.NMap.get(Nat, S.State.clients(s), c, 0n)) : Nat}) -> {S.NMap.get(Nat, S.State.clients(S.applyAll(ws, s)), c, 0n) == S.lastSeq(ws, S.NMap.get(Nat, S.State.clients(s), c, 0n)) : Nat}:
+  (g1, g2) = r
+  %Equal.sym(S.State, S.applyAll(ws, s), S.applyForce(ws, s), g1) : {S.NMap.get(Nat, S.State.clients(_), c, 0n) == S.lastSeq(ws, S.NMap.get(Nat, S.State.clients(s), c, 0n)) : Nat}
+  g2
+
+def Laws.batch_acked(s, c, ws, asc):
+  %sort_asc(ws, S.NMap.get(Nat, S.State.clients(s), c, 0n), c, asc) : {S.NMap.get(Nat, S.State.clients(S.applyAll(_, s)), c, 0n) == S.lastSeq(ws, S.NMap.get(Nat, S.State.clients(s), c, 0n)) : Nat}
+  batch.acked(s, c, ws, batch.go(ws, s, c, S.NMap.get(Nat, S.State.clients(s), c, 0n), {==}, asc))
