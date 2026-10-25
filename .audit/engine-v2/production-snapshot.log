@@ -1,0 +1,3 @@
+FC3EE5FB converged after 807 ms, cursor=678, distinct _meta.after values seen while polling: 0
+25E51086 converged after 807 ms, cursor=678, distinct _meta.after values seen while polling: 0
+no local server file; app hashes: FC3EE5FB workout_templates=20:728bb8dc workout_sessions=2:af1df25b custom_exercises=0:d7517139 exercise_settings=0:d7517139 settings=1:60116497 programs=4:8c278222 gym_profiles=2:ea3abbe6 body_weights=647:03e1cf35 api_tokens=0:d7517139 | 25E51086 workout_templates=20:728bb8dc workout_sessions=2:af1df25b custom_exercises=0:d7517139 exercise_settings=0:d7517139 settings=1:60116497 programs=4:8c278222 gym_profiles=2:ea3abbe6 body_weights=647:03e1cf35 api_tokens=0:d7517139

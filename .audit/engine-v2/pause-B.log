@@ -1,0 +1,21 @@
+66 | 	const ms = await until('first page on the app', () => meta(db, 'after') != null);
+67 | 	process.kill(Number(pid), 'SIGSTOP');
+68 | 	console.log(`server ${pid} stopped ${ms.toFixed(0)} ms after the database appeared, after=${meta(db, 'after')} rows so far: ${TABLES.map(t => count(db, t)).reduce((a, b) => a + b, 0)}`);
+69 | }
+70 | 
+71 | const one = <T>(db: Database, sql: string, ...params: unknown[]) => db.query(sql).get(...(params as never[])) as T;
+                                                                            ^
+SQLiteError: no such table: _meta
+      errno: 1,
+ byteOffset: -1,
+       code: "SQLITE_ERROR"
+
+      at [prepareOwned] (bun:sqlite:369:37)
+      at query (bun:sqlite:386:31)
+      at one (/Users/stefan/code/sync-engine/.audit/engine-v2/measure.ts:71:72)
+      at meta (/Users/stefan/code/sync-engine/.audit/engine-v2/measure.ts:73:45)
+      at <anonymous> (/Users/stefan/code/sync-engine/.audit/engine-v2/measure.ts:66:56)
+      at until (/Users/stefan/code/sync-engine/.audit/engine-v2/measure.ts:89:10)
+      at pause (/Users/stefan/code/sync-engine/.audit/engine-v2/measure.ts:66:19)
+
+Bun v1.4.4 (macOS arm64)

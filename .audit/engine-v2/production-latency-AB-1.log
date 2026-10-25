@@ -1,0 +1,3 @@
+watching settings on the writer (1:60116497); make the write in the app now
+writer settings is now 1:9bd4b618 (outbox=1)
+RESULT latency settings: reader reached 1:9bd4b618 270 ms after the writer's database changed

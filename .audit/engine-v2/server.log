@@ -1,0 +1,96 @@
+Server running at http://localhost:16151/ over /Users/stefan/code/a-better-me-v2/.data/a-better-me-v2.sqlite
+2026-10-25T05:39:58.3NZ serve.sh pageSize=3 retention=default compactEvery=default
+Server running at http://localhost:16151/ over /Users/stefan/code/a-better-me-v2/.data/a-better-me-v2.sqlite
+2026-10-25T05:43:48.3NZ serve.sh pageSize=3 retention=default compactEvery=default
+Server running at http://localhost:16151/ over /Users/stefan/code/a-better-me-v2/.data/a-better-me-v2.sqlite
+2026-10-25T05:45:33.3NZ serve.sh pageSize=3 retention=default compactEvery=default
+Server running at http://localhost:16151/ over /Users/stefan/code/a-better-me-v2/.data/a-better-me-v2.sqlite
+2026-10-25T05:52:40.3NZ serve.sh pageSize=3 retention=default compactEvery=default
+Server running at http://localhost:16151/ over /Users/stefan/code/a-better-me-v2/.data/a-better-me-v2.sqlite
+2026-10-25T05:53:09.3NZ serve.sh pageSize=3 retention=0 compactEvery=0
+Server running at http://localhost:16151/ over /Users/stefan/code/a-better-me-v2/.data/a-better-me-v2.sqlite
+58 |   const tables = new Map(schema.tables.map((table) => [table.name, table])), retention = options.retention ?? 30 * DAY, compactEvery = options.compactEvery ?? DAY / 24, pageSize = options.pageSize ?? 1000, now = options.now ?? Date.now;
+59 |   if (!Number.isInteger(pageSize) || pageSize < 1)
+60 |     throw Error(`pageSize must be a positive integer, got ${pageSize}`);
+61 |   if (retention < 0 || compactEvery < 0)
+62 |     throw Error("retention and compactEvery must not be negative");
+63 |     const row = driver.exec("SELECT value FROM _meta WHERE key = ?", [key])[0];
+                          ^
+SQLiteError: disk I/O error
+      errno: 6922,
+ byteOffset: -1,
+       code: "SQLITE_IOERR_VNODE"
+
+      at meta (/Users/stefan/code/a-better-me-v2/node_modules/.bun/sync-engine@github+smirea+sync-engine+7e25a98+35817b22d8fa52c1/node_modules/sync-engine/packages/core/src/space.ts:107:22)
+      at nudging (/Users/stefan/code/a-better-me-v2/server/src/index.ts:23:23)
+      at engine (/Users/stefan/code/a-better-me-v2/server/src/index.ts:48:12)
+      at handle (/Users/stefan/code/a-better-me-v2/server/src/api.ts:44:13)
+
+58 |   const tables = new Map(schema.tables.map((table) => [table.name, table])), retention = options.retention ?? 30 * DAY, compactEvery = options.compactEvery ?? DAY / 24, pageSize = options.pageSize ?? 1000, now = options.now ?? Date.now;
+59 |   if (!Number.isInteger(pageSize) || pageSize < 1)
+60 |     throw Error(`pageSize must be a positive integer, got ${pageSize}`);
+61 |   if (retention < 0 || compactEvery < 0)
+62 |     throw Error("retention and compactEvery must not be negative");
+63 |     const row = driver.exec("SELECT value FROM _meta WHERE key = ?", [key])[0];
+                          ^
+SQLiteError: disk I/O error
+      errno: 6922,
+ byteOffset: -1,
+       code: "SQLITE_IOERR_VNODE"
+
+      at meta (/Users/stefan/code/a-better-me-v2/node_modules/.bun/sync-engine@github+smirea+sync-engine+7e25a98+35817b22d8fa52c1/node_modules/sync-engine/packages/core/src/space.ts:107:22)
+      at nudging (/Users/stefan/code/a-better-me-v2/server/src/index.ts:23:23)
+      at engine (/Users/stefan/code/a-better-me-v2/server/src/index.ts:48:12)
+      at handle (/Users/stefan/code/a-better-me-v2/server/src/api.ts:44:13)
+
+58 |   const tables = new Map(schema.tables.map((table) => [table.name, table])), retention = options.retention ?? 30 * DAY, compactEvery = options.compactEvery ?? DAY / 24, pageSize = options.pageSize ?? 1000, now = options.now ?? Date.now;
+59 |   if (!Number.isInteger(pageSize) || pageSize < 1)
+60 |     throw Error(`pageSize must be a positive integer, got ${pageSize}`);
+61 |   if (retention < 0 || compactEvery < 0)
+62 |     throw Error("retention and compactEvery must not be negative");
+63 |     const row = driver.exec("SELECT value FROM _meta WHERE key = ?", [key])[0];
+                          ^
+SQLiteError: disk I/O error
+      errno: 6922,
+ byteOffset: -1,
+       code: "SQLITE_IOERR_VNODE"
+
+      at meta (/Users/stefan/code/a-better-me-v2/node_modules/.bun/sync-engine@github+smirea+sync-engine+7e25a98+35817b22d8fa52c1/node_modules/sync-engine/packages/core/src/space.ts:107:22)
+      at nudging (/Users/stefan/code/a-better-me-v2/server/src/index.ts:23:23)
+      at engine (/Users/stefan/code/a-better-me-v2/server/src/index.ts:48:12)
+      at handle (/Users/stefan/code/a-better-me-v2/server/src/api.ts:44:13)
+
+58 |   const tables = new Map(schema.tables.map((table) => [table.name, table])), retention = options.retention ?? 30 * DAY, compactEvery = options.compactEvery ?? DAY / 24, pageSize = options.pageSize ?? 1000, now = options.now ?? Date.now;
+59 |   if (!Number.isInteger(pageSize) || pageSize < 1)
+60 |     throw Error(`pageSize must be a positive integer, got ${pageSize}`);
+61 |   if (retention < 0 || compactEvery < 0)
+62 |     throw Error("retention and compactEvery must not be negative");
+63 |     const row = driver.exec("SELECT value FROM _meta WHERE key = ?", [key])[0];
+                          ^
+SQLiteError: disk I/O error
+      errno: 6922,
+ byteOffset: -1,
+       code: "SQLITE_IOERR_VNODE"
+
+      at meta (/Users/stefan/code/a-better-me-v2/node_modules/.bun/sync-engine@github+smirea+sync-engine+7e25a98+35817b22d8fa52c1/node_modules/sync-engine/packages/core/src/space.ts:107:22)
+      at nudging (/Users/stefan/code/a-better-me-v2/server/src/index.ts:23:23)
+      at engine (/Users/stefan/code/a-better-me-v2/server/src/index.ts:48:12)
+      at handle (/Users/stefan/code/a-better-me-v2/server/src/api.ts:44:13)
+
+58 |   const tables = new Map(schema.tables.map((table) => [table.name, table])), retention = options.retention ?? 30 * DAY, compactEvery = options.compactEvery ?? DAY / 24, pageSize = options.pageSize ?? 1000, now = options.now ?? Date.now;
+59 |   if (!Number.isInteger(pageSize) || pageSize < 1)
+60 |     throw Error(`pageSize must be a positive integer, got ${pageSize}`);
+61 |   if (retention < 0 || compactEvery < 0)
+62 |     throw Error("retention and compactEvery must not be negative");
+63 |     const row = driver.exec("SELECT value FROM _meta WHERE key = ?", [key])[0];
+                          ^
+SQLiteError: disk I/O error
+      errno: 6922,
+ byteOffset: -1,
+       code: "SQLITE_IOERR_VNODE"
+
+      at meta (/Users/stefan/code/a-better-me-v2/node_modules/.bun/sync-engine@github+smirea+sync-engine+7e25a98+35817b22d8fa52c1/node_modules/sync-engine/packages/core/src/space.ts:107:22)
+      at nudging (/Users/stefan/code/a-better-me-v2/server/src/index.ts:23:23)
+      at engine (/Users/stefan/code/a-better-me-v2/server/src/index.ts:48:12)
+      at handle (/Users/stefan/code/a-better-me-v2/server/src/api.ts:44:13)
+

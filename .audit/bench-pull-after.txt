@@ -1,0 +1,10 @@
+seeded 5000 rows and 20000 tombstones, head 45000
+_changes 25000 rows, _log 45000 rows
+cursor 0, protocol 1: 5000 rows, 456 KB, 1.0 ms (median of 5)
+cursor 0, protocol 2 page: 1000 rows, 92 KB, 0.2 ms (median of 5)
+cursor 5000: 20000 rows, 858 KB, 3.4 ms (median of 5)
+compact(): horizon 45000 in 11.6 ms
+_changes 5000 rows, _log 0 rows
+cursor 0, protocol 1: 5000 rows, 456 KB, 0.9 ms (median of 5)
+cursor 0, protocol 2 page: 1000 rows, 92 KB, 0.2 ms (median of 5)
+cursor 5000: 1000 rows, 92 KB, 0.2 ms (median of 5)

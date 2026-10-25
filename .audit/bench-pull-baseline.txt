@@ -1,0 +1,4 @@
+seeded 5000 rows and 20000 tombstones, head 45000
+_changes 25000 rows, _log 45000 rows
+cursor 0: 5000 rows, 456 KB, 1.0 ms (median of 5)
+cursor 5000: 20000 rows, 858 KB, 3.5 ms (median of 5)

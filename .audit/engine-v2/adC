@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /Users/stefan/.t3/userdata/device/bin/agent-device "$@" --platform ios --udid 27DE4391-9C99-4E59-BB9B-CDE258E9BCE1 --config /Users/stefan/.t3/userdata/device/hosts/25bf8e1a2393f1108d37029b.json --session t3-9f1e23b5ac86baaa003faab8
