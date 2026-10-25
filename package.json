@@ -12,14 +12,17 @@
 		"./bun-sqlite": "./packages/bun-sqlite/src/index.ts",
 		"./bun-server": "./packages/bun-server/src/index.ts",
 		"./cloudflare": "./packages/cloudflare/src/index.ts",
-		"./schema": "./packages/schema/src/index.ts"
+		"./schema": "./packages/schema/src/index.ts",
+		"./client-web": "./packages/client-web/src/index.ts",
+		"./client-web/worker": "./packages/client-web/src/worker.ts"
 	},
 	"scripts": {
 		"postinstall": "lefthook install",
 		"lint": "oxlint --fix && oxfmt",
 		"lint:ci": "oxlint && oxfmt --check",
 		"typecheck": "bun check",
-		"test": "bun test --pass-with-no-tests",
+		"test": "bun test --pass-with-no-tests --path-ignore-patterns 'packages/client-web/**'",
+		"test:web": "bun test packages/client-web",
 		"spec": "bun scripts/spec.ts",
 		"build": "bun build packages/core/src/index.ts --target browser --outdir dist",
 		"spec-vectors": "bun scripts/spec-vectors.ts"
@@ -30,6 +33,7 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251011.0",
+		"@sqlite.org/sqlite-wasm": "3.54.1-build1",
 		"@types/bun": "^1.4.4",
 		"es-toolkit": "^1.53.0",
 		"kill-port-process": "^5.0.0",
@@ -37,14 +41,19 @@
 		"lodash": "^4.18.1",
 		"oxfmt": "^0.74.0",
 		"oxlint": "^1.89.0",
+		"playwright": "1.64.1",
 		"typescript": "^7.0.2",
 		"wrangler": "^4.45.0"
 	},
 	"peerDependencies": {
-		"@cloudflare/workers-types": "^4.20251011.0"
+		"@cloudflare/workers-types": "^4.20251011.0",
+		"@sqlite.org/sqlite-wasm": "3.54.1-build1"
 	},
 	"peerDependenciesMeta": {
 		"@cloudflare/workers-types": {
+			"optional": true
+		},
+		"@sqlite.org/sqlite-wasm": {
 			"optional": true
 		}
 	},
