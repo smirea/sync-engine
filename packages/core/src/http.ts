@@ -11,12 +11,11 @@ const WriteSchema = z.discriminatedUnion('op', [
 	z.object({ ...target, op: z.literal('delete') }),
 ]);
 
-export const SyncRequestSchema = z.object({
-	protocol: z.literal(1),
-	client: z.string().min(1),
-	cursor: z.int().nonnegative(),
-	writes: z.array(WriteSchema),
-});
+const body = { client: z.string().min(1), cursor: z.int().nonnegative(), writes: z.array(WriteSchema) };
+export const SyncRequestSchema = z.discriminatedUnion('protocol', [
+	z.object({ protocol: z.literal(1), ...body }),
+	z.object({ protocol: z.literal(2), ...body, after: z.object({ table: z.string(), id: z.string() }).optional() }),
+]);
 
 export async function handleSync(space: Space, request: Request): Promise<Response> {
 	let body: unknown;
@@ -25,8 +24,13 @@ export async function handleSync(space: Space, request: Request): Promise<Respon
 	} catch {
 		return Response.json({ error: 'body is not JSON' }, { status: 400 });
 	}
-	if (typeof body === 'object' && body !== null && !Array.isArray(body) && Reflect.get(body, 'protocol') !== 1) {
-		return Response.json({ error: 'protocol 1 required' }, { status: 426 });
+	if (
+		typeof body === 'object' &&
+		body !== null &&
+		!Array.isArray(body) &&
+		![1, 2].includes(Reflect.get(body, 'protocol'))
+	) {
+		return Response.json({ error: 'protocol 1 or 2 required' }, { status: 426 });
 	}
 	const parsed = SyncRequestSchema.safeParse(body);
 	if (!parsed.success) return Response.json({ error: z.prettifyError(parsed.error) }, { status: 400 });

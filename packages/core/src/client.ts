@@ -1,12 +1,16 @@
 import { migrate } from './schema.ts';
 import { rowKey, upsert } from './sql.ts';
-import type { Schema, SqlDriver, SqlValue, SyncResponse, Table, Value, Values, Write } from './types.ts';
+import type { After, Schema, SqlDriver, SqlValue, SyncResponse, Table, Value, Values, Write } from './types.ts';
+
+/** A paged snapshot in progress: the page to request next and the head of its first page, the cursor once it ends. */
+export type SnapshotProgress = { after: After; head: number };
 
 export type Client = {
 	migrate(): void;
 	collect(): { writes: Write[]; acked: number };
 	apply(response: SyncResponse, acked: number): Set<string>;
 	cursor(): number;
+	snapshot(): SnapshotProgress | null;
 	pending(): number;
 	clientId(): string;
 };
@@ -19,6 +23,10 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 	const meta = (name: string) => driver.exec('SELECT value FROM _meta WHERE key = ?', [name])[0]?.value;
 	const setMeta = (name: string, value: SqlValue) =>
 		driver.exec('INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)', [name, value]);
+	const snapshot = (): SnapshotProgress | null => {
+		const after = meta('after');
+		return after ? { after: JSON.parse(String(after)) as After, head: Number(meta('snapshot_head')) } : null;
+	};
 
 	const readRow = (table: Table, id: string): Values | null => {
 		const row = driver.exec(`SELECT ${table.columns.map(c => c.name).join(', ')} FROM ${table.name} WHERE id = ?`, [
@@ -65,11 +73,12 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 				return touched;
 			}
 			setMeta('applying', 1);
+			const progress = snapshot();
 			const pendingRows = driver
 				.exec('SELECT "table", id FROM _outbox WHERE seq > ?', [acked])
 				.map(row => ({ table: String(row.table), id: String(row.id) }));
 			const pending = new Set(pendingRows.map(row => rowKey(row.table, row.id)));
-			if (response.snapshot) {
+			if (response.snapshot && !progress) {
 				for (const table of schema.tables) {
 					const keep = pendingRows.filter(row => row.table === table.name).map(row => row.id);
 					driver.exec(
@@ -101,7 +110,15 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 				);
 			}
 			driver.exec('DELETE FROM _outbox WHERE seq <= ?', [acked]);
-			setMeta('cursor', response.head);
+			const head = progress?.head ?? response.head;
+			if (response.next) {
+				setMeta('after', JSON.stringify(response.next));
+				setMeta('snapshot_head', head);
+			} else {
+				// The first page's head: rows that changed while later pages were fetched come with the next delta.
+				setMeta('cursor', head);
+				driver.exec("DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')");
+			}
 			setMeta('applying', 0);
 			return touched;
 		});
@@ -117,6 +134,7 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 		collect,
 		apply,
 		cursor: () => Number(meta('cursor')),
+		snapshot,
 		pending: () => Number(driver.exec('SELECT count(*) AS n FROM _outbox')[0]!.n),
 		clientId: () => String(meta('client')),
 	};

@@ -2,7 +2,18 @@ import { describe, expect, test } from 'bun:test';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { z } from 'zod';
 import { bunSqlite } from '../bun-sqlite/src/index.ts';
-import { createClient, createSpace, defineSchema, type Schema, type SqlDriver, type Write } from './src/index.ts';
+import {
+	createClient,
+	createSpace,
+	defineSchema,
+	type Client,
+	type Schema,
+	type Space,
+	type SpaceOptions,
+	type SqlDriver,
+	type SyncResponse,
+	type Write,
+} from './src/index.ts';
 
 const notes = sqliteTable('notes', {
 	id: text('id').primaryKey(),
@@ -13,9 +24,27 @@ const notes = sqliteTable('notes', {
 });
 const schema = defineSchema({ tables: { notes }, values: { notes: { tags: z.array(z.string()) } } });
 
-function setup(s: Schema = schema) {
+/** One protocol 2 sync the way the client loop runs it: the outbox on the first request, then every snapshot page. */
+function syncPages(server: Space, client: Client, batch = client.collect()): SyncResponse {
+	let response: SyncResponse;
+	do {
+		const progress = client.snapshot();
+		response = server.sync({
+			protocol: 2,
+			client: client.clientId(),
+			cursor: client.cursor(),
+			writes: batch.writes,
+			...(progress ? { after: progress.after } : {}),
+		});
+		client.apply(response, batch.acked);
+		batch = { writes: [], acked: 0 };
+	} while (client.snapshot());
+	return response;
+}
+
+function setup(s: Schema = schema, options: SpaceOptions = {}) {
 	const serverDb = bunSqlite(':memory:');
-	const server = createSpace(serverDb, s);
+	const server = createSpace(serverDb, s, options);
 	server.migrate();
 	const peer = () => {
 		const db = bunSqlite(':memory:');
@@ -24,17 +53,8 @@ function setup(s: Schema = schema) {
 		return {
 			db,
 			client,
-			sync() {
-				const { writes, acked } = client.collect();
-				const response = server.sync({ protocol: 1, client: client.clientId(), cursor: client.cursor(), writes });
-				client.apply(response, acked);
-				return response;
-			},
-			pull() {
-				const response = server.sync({ protocol: 1, client: client.clientId(), cursor: client.cursor(), writes: [] });
-				client.apply(response, 0);
-				return response;
-			},
+			sync: () => syncPages(server, client),
+			pull: () => syncPages(server, client, { writes: [], acked: 0 }),
 			rows: () => db.exec('SELECT * FROM notes ORDER BY id'),
 		};
 	};
@@ -327,7 +347,7 @@ describe('protocol amendments', () => {
 	});
 
 	test('interleaved edits give a batch out of seq order and every write still applies', () => {
-		const { server, a } = setup();
+		const { server, a, b } = setup();
 		insert(a, 'n1', 'A');
 		insert(a, 'n2', 'B');
 		update(a, 'n1', 'title', 'A2');
@@ -336,6 +356,8 @@ describe('protocol amendments', () => {
 		expect(response.acked).toBe(3);
 		expect(server.dump().notes).toEqual([row('n1', 'A2'), row('n2', 'B')]);
 		expect(a.client.pending()).toBe(0);
+		b.sync();
+		expect(b.rows()).toEqual([row('n1', 'A2'), row('n2', 'B')]);
 	});
 
 	test('a rejected insert the server never stored comes back as a tombstone', () => {
@@ -379,5 +401,179 @@ describe('protocol amendments', () => {
 		expect(b.client.pending()).toBe(0);
 		expect(server.dump().notes!.map(r => r.id)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7']);
 		expect(b.rows()).toHaveLength(7);
+	});
+});
+
+describe('protocol 2', () => {
+	const ids = (response: SyncResponse) => response.rows.map(r => r.id);
+
+	test('compaction drops old tombstones and log rows, and a cursor behind the horizon snapshots and converges', () => {
+		let clock = 1000;
+		const { serverDb, server, a, b } = setup(schema, { now: () => clock, retention: 100, compactEvery: 10 });
+		insert(a, 'n1', 'one');
+		insert(a, 'n2', 'two');
+		a.sync();
+		b.sync();
+		a.db.exec("DELETE FROM notes WHERE id = 'n1'");
+		a.sync();
+		expect(serverDb.exec('SELECT id, seq, deleted FROM _changes ORDER BY seq')).toEqual([
+			{ id: 'n2', seq: 2, deleted: 0 },
+			{ id: 'n1', seq: 3, deleted: 1 },
+		]);
+		clock = 1200;
+		insert(a, 'n3', 'three');
+		a.sync();
+		expect(serverDb.exec('SELECT id, seq, deleted FROM _changes ORDER BY seq')).toEqual([
+			{ id: 'n2', seq: 2, deleted: 0 },
+			{ id: 'n3', seq: 4, deleted: 0 },
+		]);
+		expect(serverDb.exec('SELECT seq FROM _log')).toEqual([{ seq: 4 }]);
+		expect(serverDb.exec("SELECT key, value FROM _meta WHERE key IN ('horizon', 'compacted_at') ORDER BY key")).toEqual(
+			[
+				{ key: 'compacted_at', value: 1200 },
+				{ key: 'horizon', value: 3 },
+			],
+		);
+		expect(server.compact()).toBe(3);
+
+		expect(b.client.cursor()).toBe(2);
+		const response = b.sync();
+		expect(response).toEqual({
+			head: 4,
+			acked: 0,
+			rejected: [],
+			snapshot: true,
+			rows: [
+				{ table: 'notes', id: 'n2', deleted: 0, values: row('n2', 'two') },
+				{ table: 'notes', id: 'n3', deleted: 0, values: row('n3', 'three') },
+			],
+			next: null,
+		});
+		expect(b.rows()).toEqual([row('n2', 'two'), row('n3', 'three')]);
+		expect(b.client.cursor()).toBe(4);
+
+		const atHorizon = server.sync({ protocol: 2, client: 'x', cursor: 3, writes: [] });
+		expect({ snapshot: atHorizon.snapshot, ids: ids(atHorizon) }).toEqual({ snapshot: false, ids: ['n3'] });
+	});
+
+	test('a pageSize-2 snapshot over 7 rows converges, with a write between pages and a crash between pages', () => {
+		const { server, a, b } = setup(schema, { pageSize: 2 });
+		for (let i = 1; i <= 7; i++) insert(a, `n${i}`, `note ${i}`);
+		a.sync();
+		expect(a.rows()).toHaveLength(7);
+
+		const request = (after?: { table: string; id: string }) =>
+			server.sync({ protocol: 2, client: b.client.clientId(), cursor: 0, writes: [], ...(after ? { after } : {}) });
+		const page1 = request();
+		expect(page1).toEqual({
+			head: 7,
+			acked: 0,
+			rejected: [],
+			snapshot: true,
+			rows: [
+				{ table: 'notes', id: 'n1', deleted: 0, values: row('n1', 'note 1') },
+				{ table: 'notes', id: 'n2', deleted: 0, values: row('n2', 'note 2') },
+			],
+			next: { table: 'notes', id: 'n2' },
+		});
+		b.client.apply(page1, 0);
+		expect(b.client.snapshot()).toEqual({ after: { table: 'notes', id: 'n2' }, head: 7 });
+		expect(b.client.cursor()).toBe(0);
+
+		update(a, 'n1', 'title', 'changed between pages');
+		a.sync();
+		const page2 = request({ table: 'notes', id: 'n2' });
+		expect({ head: page2.head, ids: ids(page2), next: page2.next }).toEqual({
+			head: 8,
+			ids: ['n3', 'n4'],
+			next: { table: 'notes', id: 'n4' },
+		});
+		b.client.apply(page2, 0);
+
+		const resumed = createClient(b.db, schema);
+		resumed.migrate();
+		expect(resumed.snapshot()).toEqual({ after: { table: 'notes', id: 'n4' }, head: 7 });
+		const last = syncPages(server, resumed, { writes: [], acked: 0 });
+		expect({ ids: ids(last), next: last.next }).toEqual({ ids: ['n7'], next: null });
+		expect(resumed.snapshot()).toBeNull();
+		expect(resumed.cursor()).toBe(7);
+		expect(b.rows().map(r => [r.id, r.title])).toEqual([
+			['n1', 'note 1'],
+			['n2', 'note 2'],
+			['n3', 'note 3'],
+			['n4', 'note 4'],
+			['n5', 'note 5'],
+			['n6', 'note 6'],
+			['n7', 'note 7'],
+		]);
+
+		const delta = b.pull();
+		expect({ snapshot: delta.snapshot, ids: ids(delta), head: delta.head }).toEqual({
+			snapshot: false,
+			ids: ['n1'],
+			head: 8,
+		});
+		expect(b.rows()).toEqual(server.dump().notes!);
+		expect(b.client.cursor()).toBe(8);
+	});
+
+	test('a pending local row survives a paged snapshot that would overwrite it', () => {
+		const { server, a, b } = setup(schema, { pageSize: 2 });
+		for (let i = 1; i <= 3; i++) insert(a, `n${i}`, `note ${i}`);
+		a.sync();
+		insert(b, 'n2', 'offline on b');
+		b.pull();
+		expect(b.rows().map(r => [r.id, r.title])).toEqual([
+			['n1', 'note 1'],
+			['n2', 'offline on b'],
+			['n3', 'note 3'],
+		]);
+		b.sync();
+		expect(server.dump().notes!.map(r => r.title)).toEqual(['note 1', 'offline on b', 'note 3']);
+	});
+
+	test('a protocol 1 request gets an unpaged snapshot and no next', () => {
+		const { server, a } = setup(schema, { pageSize: 2 });
+		for (let i = 1; i <= 3; i++) insert(a, `n${i}`, `note ${i}`);
+		a.sync();
+		const response = server.sync({ protocol: 1, client: 'v1', cursor: 0, writes: [] });
+		expect(response).toEqual({
+			head: 3,
+			acked: 0,
+			rejected: [],
+			snapshot: true,
+			rows: [
+				{ table: 'notes', id: 'n1', deleted: 0, values: row('n1', 'note 1') },
+				{ table: 'notes', id: 'n2', deleted: 0, values: row('n2', 'note 2') },
+				{ table: 'notes', id: 'n3', deleted: 0, values: row('n3', 'note 3') },
+			],
+		});
+		expect('next' in response).toBe(false);
+	});
+
+	test('a page crosses a table boundary in schema order', () => {
+		const items = sqliteTable('items', { id: text('id').primaryKey(), name: text('name').notNull() });
+		const s = defineSchema({ tables: { notes, items } });
+		const { server } = setup(s, { pageSize: 2 });
+		server.sync({
+			protocol: 1,
+			client: 'w',
+			cursor: 0,
+			writes: [
+				put(1, 'items', 'i1', { name: 'first item' }),
+				put(2, 'notes', 'n1', { title: 'first note' }),
+				put(3, 'items', 'i2', { name: 'second item' }),
+			],
+		});
+		const page1 = server.sync({ protocol: 2, client: 'r', cursor: 0, writes: [] });
+		expect({ keys: page1.rows.map(r => `${r.table}/${r.id}`), next: page1.next }).toEqual({
+			keys: ['notes/n1', 'items/i1'],
+			next: { table: 'items', id: 'i1' },
+		});
+		const page2 = server.sync({ protocol: 2, client: 'r', cursor: 0, writes: [], after: page1.next! });
+		expect({ keys: page2.rows.map(r => `${r.table}/${r.id}`), next: page2.next }).toEqual({
+			keys: ['items/i2'],
+			next: null,
+		});
 	});
 });

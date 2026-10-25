@@ -16,12 +16,24 @@ export type Write =
 	| { seq: number; table: string; id: string; op: 'patch'; values: Values }
 	| { seq: number; table: string; id: string; op: 'delete' };
 
-export type SyncRequest = { protocol: 1; client: string; cursor: number; writes: Write[] };
+/** The last row of a snapshot page, by schema table order then id; the next page starts after it. */
+export type After = { table: string; id: string };
+export type SyncRequest =
+	| { protocol: 1; client: string; cursor: number; writes: Write[] }
+	| { protocol: 2; client: string; cursor: number; writes: Write[]; after?: After };
 export type Rejected = { seq: number; table: string; id: string; reason: string };
 export type PulledRow =
 	| { table: string; id: string; deleted: 0; values: Values }
 	| { table: string; id: string; deleted: 1 };
-export type SyncResponse = { head: number; acked: number; rejected: Rejected[]; snapshot: boolean; rows: PulledRow[] };
+export type SyncResponse = {
+	head: number;
+	acked: number;
+	rejected: Rejected[];
+	snapshot: boolean;
+	rows: PulledRow[];
+	/** Protocol 2 only: where the next snapshot page starts, null on the last page and on every delta. */
+	next?: After | null;
+};
 
 export type StorageClass = 'TEXT' | 'INTEGER' | 'REAL';
 export type Column = {
