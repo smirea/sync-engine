@@ -31,7 +31,7 @@ describe('handleSync', () => {
 	});
 
 	test('426 for another protocol, before the shape is checked', async () => {
-		expect((await post(JSON.stringify({ protocol: 2, writes: 'nope' }))).status).toBe(426);
+		expect((await post(JSON.stringify({ protocol: 3, writes: 'nope' }))).status).toBe(426);
 		expect((await post(JSON.stringify({ clientId: 'old', cursor: 0 }))).status).toBe(426);
 	});
 

@@ -27,7 +27,7 @@ describe('serve', () => {
 	test('status codes for auth, routes, bad bodies and other protocols', async () => {
 		expect((await post('{not json')).status).toBe(400);
 		expect((await post(JSON.stringify({ protocol: 1, client: 'a', cursor: 0 }))).status).toBe(400);
-		expect((await post(JSON.stringify({ protocol: 2, client: 'a', cursor: 0, writes: [] }))).status).toBe(426);
+		expect((await post(JSON.stringify({ protocol: 3, client: 'a', cursor: 0, writes: [] }))).status).toBe(426);
 		expect((await post(JSON.stringify({ protocol: 1, client: 'a', cursor: 0, writes: [] }), 'nope')).status).toBe(401);
 		expect((await fetch(`${base}/live`)).status).toBe(401);
 		expect((await fetch(`${base}/live`, { headers: { authorization: 'Bearer t0k' } })).status).toBe(400);
