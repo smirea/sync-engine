@@ -1,4 +1,12 @@
-import { createClient, LIVE_PROTOCOL, type Schema, type SqlDriver, type SyncResponse } from '../../core/src/index.ts';
+import {
+	createClient,
+	LIVE_PROTOCOL,
+	type Schema,
+	type SqlDriver,
+	type SyncRequest,
+	type SyncResponse,
+	type Write,
+} from '../../core/src/index.ts';
 
 export type SyncClientOptions = {
 	driver: SqlDriver;
@@ -15,7 +23,15 @@ export type SyncClientOptions = {
 	maxBackoff?: number;
 };
 
-export type SyncStatus = { live: boolean; syncing: boolean; pending: number; cursor: number; lastError: string | null };
+export type SyncStatus = {
+	live: boolean;
+	syncing: boolean;
+	pending: number;
+	cursor: number;
+	lastError: string | null;
+	/** A paged snapshot in progress and the rows this run has applied so far, else null. */
+	snapshot: { rows: number } | null;
+};
 
 export type SyncClient = {
 	migrate(): void;
@@ -60,27 +76,47 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	let retry: ReturnType<typeof setTimeout> | null = null;
 	let retryBackoff = firstBackoff;
 	let live: Live | null = null;
+	let snapshotRows = 0;
 
 	const ready = () => {
 		if (!migrated) throw new Error('call migrate() before using the sync client');
 	};
 	const background = () => void sync().catch(() => {});
 
+	async function post(writes: Write[]): Promise<SyncResponse> {
+		const progress = core.snapshot();
+		const request: SyncRequest = {
+			protocol: 2,
+			client: core.clientId(),
+			cursor: core.cursor(),
+			writes,
+			...(progress ? { after: progress.after } : {}),
+		};
+		const reply = await fetchFn(`${options.endpoint}/sync`, {
+			method: 'POST',
+			headers: {
+				...options.headers,
+				'content-type': 'application/json',
+				...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
+			},
+			body: JSON.stringify(request),
+		});
+		if (!reply.ok) throw new Error(`sync failed with ${reply.status}: ${await reply.text()}`);
+		return (await reply.json()) as SyncResponse;
+	}
+
+	/** One sync: the outbox goes with the first request, then every remaining snapshot page with no writes. */
 	async function once(): Promise<{ response: SyncResponse; touched: Set<string> }> {
 		try {
-			const { writes, acked } = core.collect();
-			const reply = await fetchFn(`${options.endpoint}/sync`, {
-				method: 'POST',
-				headers: {
-					...options.headers,
-					'content-type': 'application/json',
-					...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
-				},
-				body: JSON.stringify({ protocol: 1, client: core.clientId(), cursor: core.cursor(), writes }),
-			});
-			if (!reply.ok) throw new Error(`sync failed with ${reply.status}: ${await reply.text()}`);
-			const response = (await reply.json()) as SyncResponse;
-			const touched = core.apply(response, acked);
+			const touched = new Set<string>();
+			let batch = core.collect();
+			let response: SyncResponse;
+			do {
+				response = await post(batch.writes);
+				for (const table of core.apply(response, batch.acked)) touched.add(table);
+				batch = { writes: [], acked: 0 };
+				snapshotRows = core.snapshot() ? snapshotRows + response.rows.length : 0;
+			} while (core.snapshot());
 			lastError = null;
 			return { response, touched };
 		} catch (error) {
@@ -253,6 +289,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 				pending: core.pending(),
 				cursor: core.cursor(),
 				lastError,
+				snapshot: core.snapshot() ? { rows: snapshotRows } : null,
 			};
 		},
 		onChange(listener) {

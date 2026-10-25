@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { bearerToken, createSpace, defineSchema, type SqlDriver, type SyncResponse } from '../core/src/index.ts';
+import {
+	bearerToken,
+	createSpace,
+	defineSchema,
+	type SqlDriver,
+	type SyncRequest,
+	type SyncResponse,
+} from '../core/src/index.ts';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { bunSqlite } from '../bun-sqlite/src/index.ts';
 import { serve } from '../bun-server/src/index.ts';
-import { createSyncClient, type SyncClientOptions } from './src/index.ts';
+import { createSyncClient, type SyncClientOptions, type SyncStatus } from './src/index.ts';
 
 const schema = defineSchema({
 	tables: {
@@ -20,9 +27,17 @@ afterEach(() => {
 	for (const fn of cleanup.splice(0).toReversed()) fn();
 });
 
-function server(options: { driver?: SqlDriver; port?: number; authorize?: (request: Request) => boolean } = {}) {
+function server(
+	options: { driver?: SqlDriver; port?: number; authorize?: (request: Request) => boolean; pageSize?: number } = {},
+) {
 	const driver = options.driver ?? bunSqlite(':memory:');
-	const instance = serve({ driver, schema, authorize: options.authorize ?? (() => true), port: options.port ?? 0 });
+	const instance = serve({
+		driver,
+		schema,
+		authorize: options.authorize ?? (() => true),
+		port: options.port ?? 0,
+		space: { pageSize: options.pageSize },
+	});
 	cleanup.push(() => instance.stop(true));
 	return {
 		instance,
@@ -74,7 +89,14 @@ describe('createSyncClient over HTTP', () => {
 		a.client.markDirty();
 		a.client.markDirty();
 		expect(await changed).toEqual(new Set(['notes']));
-		expect(a.client.status()).toEqual({ live: false, syncing: false, pending: 0, cursor: 2, lastError: null });
+		expect(a.client.status()).toEqual({
+			live: false,
+			syncing: false,
+			pending: 0,
+			cursor: 2,
+			lastError: null,
+			snapshot: null,
+		});
 
 		await b.client.sync();
 		expect(b.rows()).toEqual([
@@ -92,6 +114,46 @@ describe('createSyncClient over HTTP', () => {
 		expect(dump()).toEqual({ notes: expected });
 		expect(a.rows()).toEqual(expected);
 		expect(b.rows()).toEqual(expected);
+	});
+
+	test('a paged snapshot runs in one sync and reports its progress', async () => {
+		const { endpoint } = server({ pageSize: 2 });
+		const a = peer(endpoint);
+		for (let i = 1; i <= 5; i++) insert(a.db, `n${i}`, `note ${i}`);
+		await a.client.sync();
+
+		const seen: (SyncStatus['snapshot'] | 'done')[] = [];
+		const pages: (SyncRequest & { protocol: 2 })[] = [];
+		const watching = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			pages.push(JSON.parse(String(init?.body)) as SyncRequest & { protocol: 2 });
+			const response = await fetch(input, init);
+			seen.push(c.client.status().snapshot ?? 'done');
+			return response;
+		}) as typeof fetch;
+		const c = peer(endpoint, { fetch: watching });
+		const changed = c.nextChange();
+		const last = await c.client.sync();
+		expect(pages.map(page => [page.cursor, page.after?.id ?? null, page.writes.length])).toEqual([
+			[0, null, 0],
+			[0, 'n2', 0],
+			[0, 'n4', 0],
+		]);
+		expect(seen).toEqual(['done', { rows: 2 }, { rows: 4 }]);
+		expect({ snapshot: last.snapshot, next: last.next, head: last.head }).toEqual({
+			snapshot: true,
+			next: null,
+			head: 5,
+		});
+		expect(await changed).toEqual(new Set(['notes']));
+		expect(c.rows().map(r => r.id)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5']);
+		expect(c.client.status()).toEqual({
+			live: false,
+			syncing: false,
+			pending: 0,
+			cursor: 5,
+			lastError: null,
+			snapshot: null,
+		});
 	});
 
 	test('a live nudge makes a started client pull within 2 s', async () => {
@@ -137,6 +199,7 @@ describe('createSyncClient over HTTP', () => {
 			rejected: [],
 			snapshot: true,
 			rows: [{ table: 'notes', id: 'n1', deleted: 0, values: { id: 'n1', title: 'first', done: 0 } }],
+			next: null,
 		});
 		const queued: SyncResponse = {
 			head: 2,
@@ -144,6 +207,7 @@ describe('createSyncClient over HTTP', () => {
 			rejected: [],
 			snapshot: false,
 			rows: [{ table: 'notes', id: 'n2', deleted: 0, values: { id: 'n2', title: 'second', done: 0 } }],
+			next: null,
 		};
 		expect(await second).toEqual(queued);
 		expect(await third).toEqual(queued);
@@ -165,6 +229,7 @@ describe('createSyncClient over HTTP', () => {
 			pending: 1,
 			cursor: 0,
 			lastError: 'sync failed with 401: unauthorized',
+			snapshot: null,
 		});
 
 		const right = peer(endpoint, { token: 'secret' });

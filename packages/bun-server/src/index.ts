@@ -3,6 +3,7 @@ import {
 	handleSync,
 	LIVE_PROTOCOL,
 	type Schema,
+	type SpaceOptions,
 	type SqlDriver,
 	withBearer,
 } from '../../core/src/index.ts';
@@ -13,6 +14,7 @@ export type ServeOptions = ({ driver: SqlDriver; file?: never } | { file: string
 	authorize(request: Request): boolean | Promise<boolean>;
 	port?: number;
 	hostname?: string;
+	space?: SpaceOptions;
 };
 
 const CORS = {
@@ -21,8 +23,8 @@ const CORS = {
 	'access-control-allow-headers': 'authorization, content-type',
 };
 
-export function serve({ schema, authorize, port, hostname, ...storage }: ServeOptions) {
-	const space = createSpace(storage.driver ?? bunSqlite(storage.file!), schema);
+export function serve({ schema, authorize, port, hostname, space: spaceOptions, ...storage }: ServeOptions) {
+	const space = createSpace(storage.driver ?? bunSqlite(storage.file!), schema, spaceOptions);
 	space.migrate();
 	return Bun.serve({
 		port,

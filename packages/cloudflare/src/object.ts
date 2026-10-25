@@ -7,15 +7,16 @@ import {
 	LIVE_PROTOCOL,
 	type Schema,
 	type Space,
+	type SpaceOptions,
 } from '../../core/src/index.ts';
 import { durableDriver } from './driver.ts';
 
 export class SpaceObject<Env = unknown> extends DurableObject<Env> {
 	protected readonly space: Space;
 
-	constructor(ctx: DurableObjectState, env: Env, schema: Schema) {
+	constructor(ctx: DurableObjectState, env: Env, schema: Schema, options?: SpaceOptions) {
 		super(ctx, env);
-		this.space = createSpace(durableDriver(ctx.storage), schema);
+		this.space = createSpace(durableDriver(ctx.storage), schema, options);
 		ctx.blockConcurrencyWhile(async () => this.space.migrate());
 		ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
 	}
