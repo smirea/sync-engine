@@ -25,6 +25,7 @@ jobs:
       bun: ${{ steps.changes.outputs.bun }}
       swift: ${{ steps.changes.outputs.swift }}
       spec: ${{ steps.changes.outputs.spec }}
+      web: ${{ steps.changes.outputs.web }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,6 +93,53 @@ jobs:
       - name: Build
         if: needs.changes.outputs.bun == 'true' && matrix.task == 'build'
         run: bun run build
+
+  web:
+    name: web (Playwright)
+    needs: changes
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      LEFTHOOK: '0'
+    steps:
+      - name: Verify change detection
+        env:
+          CHANGE_RESULT: ${{ needs.changes.result }}
+        run: test "$CHANGE_RESULT" = success
+      - name: No relevant changes
+        if: needs.changes.outputs.web != 'true'
+        run: echo "No web client changes; web passed."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.web == 'true'
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: needs.changes.outputs.web == 'true'
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: needs.changes.outputs.web == 'true'
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('.bun-version') }}-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('.bun-version') }}-
+      - name: Install dependencies
+        if: needs.changes.outputs.web == 'true'
+        run: bun install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: needs.changes.outputs.web == 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('bun.lock', 'bun.lockb') }}
+      - name: Install browsers
+        if: needs.changes.outputs.web == 'true'
+        run: bunx playwright install --with-deps chromium webkit
+      - name: Web client test
+        if: needs.changes.outputs.web == 'true'
+        run: bun run test:web
 
   spec:
     name: proofs (Bend)

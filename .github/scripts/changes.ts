@@ -17,5 +17,7 @@ const bun = kind !== 'empty' && (common || paths.some(name => !isSwift(name)));
 const swift = common || paths.some(isSwift);
 
 const spec = common || paths.some(name => name.startsWith('spec/') || name === 'scripts/spec.ts');
+const web =
+	common || paths.some(name => name.startsWith('packages/client-web/') || name.startsWith('packages/client/'));
 
-appendFileSync(output, `bun=${bun}\nswift=${swift}\nspec=${spec}\n`);
+appendFileSync(output, `bun=${bun}\nswift=${swift}\nspec=${spec}\nweb=${web}\n`);
