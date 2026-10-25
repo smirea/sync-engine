@@ -13,6 +13,10 @@ pre-commit:
     test:
       glob: '*.{js,mjs,mts,ts,tsx}'
       run: bun --no-env-file scripts/test-changed.ts {staged_files}
+    # The web test reaches its page and worker through Bun.build, which test-changed's import walk cannot see.
+    web:
+      glob: 'packages/client-web/**'
+      run: bun --no-env-file run test:web
     spec:
       glob: 'spec/*'
       run: bun scripts/spec.ts
@@ -22,3 +26,6 @@ pre-push:
     test:
       glob: '*.{js,mjs,mts,ts,tsx}'
       run: bun --no-env-file scripts/test-changed.ts {push_files}
+    web:
+      glob: 'packages/client-web/**'
+      run: bun --no-env-file run test:web
