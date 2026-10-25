@@ -5,10 +5,9 @@ import XCTest
 
 @MainActor
 final class PagingTests: XCTestCase {
-    private var path = ""
+    private let path = FileManager.default.temporaryDirectory.appending(path: "paging-\(UUID().uuidString).sqlite").path
 
     override func setUp() {
-        path = FileManager.default.temporaryDirectory.appending(path: "paging-\(UUID().uuidString).sqlite").path
         Relay.reset()
     }
 
@@ -102,7 +101,7 @@ final class PagingTests: XCTestCase {
         let url = server.url
         Relay.reset { index in
             guard index == 1 else { return }
-            try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: [SyncWrite(seq: 8, table: "notes", id: "n1", op: .patch, values: ["title": .string("EDITED")])], after: nil), to: url)
+            _ = try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: [SyncWrite(seq: 8, table: "notes", id: "n1", op: .patch, values: ["title": .string("EDITED")])], after: nil), to: url)
         }
 
         await client.sync()
