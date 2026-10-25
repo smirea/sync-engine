@@ -1,0 +1,5 @@
+at	what	why	evidence	result
+2026-10-25T04:26:58Z	spike 1: SAH pool in SharedWorker	brief assumed SharedWorker holds the db	chromium: Missing required OPFS APIs; dedicated ok; 2nd dedicated NoModificationAllowedError; webkit ephemeral UnknownError	db cannot live in a SharedWorker
+2026-10-25T04:26:58Z	spike 2: SharedWorker spawning nested db worker	keep one shared connection	chromium: Worker is not defined in SharedWorkerGlobalScope; webkit persistent context works, ephemeral fails	drop SharedWorker; dedicated worker per tab + Web Locks leader + BroadcastChannel bus
+2026-10-25T04:51:06Z	PR #14 opened, pr-ship exit 0 on first run	brief	all 7 CI jobs success, web job ran chromium and webkit on ubuntu in 61 s	https://github.com/smirea/sync-engine/pull/14 head 6090665
+2026-10-25T04:56:28Z	Codex found 2 real bugs (tx left open on error, stale token on join); fixed with tests that fail under mutation	bot triage: fix	head 594b359, pr-ship exit 0 again	PR green and mergeable

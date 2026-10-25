@@ -1,0 +1,362 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-25 01:46:24.870 Df App[19233:df94a1] [com.apple.network:connection] [C2.1 Hostname#90977f4f:443 ready transform (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.115s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.870 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route))] event: path:unsatisfied @226.115s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.871 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.116s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.871 Df App[19233:df94a1] [com.apple.network:connection] [C1.1 Hostname#0c1cb080:443 ready resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.144s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.872 Df App[19233:df94a1] [com.apple.network:connection] [C1 IPv6#7158fea1.443 ready parent-flow (unsatisfied (No network route))] event: path:unsatisfied @226.146s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.872 Df App[19233:df94a1] [com.apple.network:connection] [C1 IPv6#7158fea1.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.146s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.873 Df App[19233:df94a1] [com.apple.network:connection] [C2.1.1.1 IPv6#6d397b06.443 ready socket-flow (unsatisfied (No network route))] event: path:unsatisfied @226.118s, uuid: 0718BCAF-EC12-439C-93A7-966C8F265973
+2026-10-25 01:46:24.873 Df App[19233:df94a1] [com.apple.network:connection] [C2.1.1 Hostname#90977f4f:443 ready resolver (unsatisfied (No network route))] event: path:unsatisfied @226.118s, uuid: 0F77FC62-ED9B-46F2-8BF3-34DF59921287
+2026-10-25 01:46:24.873 Df App[19233:df94a1] [com.apple.network:connection] [C2.1 Hostname#90977f4f:443 ready transform (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.118s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.873 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.118s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.874 Df App[19233:df94a1] [com.apple.network:connection] [C1.1.1 IPv6#7158fea1.443 ready socket-flow (unsatisfied (No network route))] event: path:unsatisfied @226.147s, uuid: E9A902B3-D5FE-4182-BA37-4A9614B12758
+2026-10-25 01:46:24.874 Df App[19233:df94a1] [com.apple.network:connection] [C1.1 Hostname#0c1cb080:443 ready resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.147s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.874 Df App[19233:df94a1] [com.apple.network:connection] [C1 IPv6#7158fea1.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.147s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.874 Df App[19233:df94a1] [com.apple.network:connection] [C2.1.1 Hostname#90977f4f:443 ready resolver (unsatisfied (No network route))] event: path:unsatisfied @226.119s, uuid: 0F77FC62-ED9B-46F2-8BF3-34DF59921287
+2026-10-25 01:46:24.874 Df App[19233:df94a1] [com.apple.network:connection] [C2.1 Hostname#90977f4f:443 ready transform (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.119s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.874 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.119s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.975 Df App[19233:df94a1] [com.apple.network:connection] [C2.1 Hostname#90977f4f:443 ready transform (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.220s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.975 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.220s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.976 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.221s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.976 Df App[19233:df94a1] [com.apple.network:connection] [C1.1 Hostname#0c1cb080:443 ready resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.249s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.978 Df App[19233:df94a1] [com.apple.network:connection] [C1 IPv6#7158fea1.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.251s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.978 Df App[19233:df94a1] [com.apple.network:connection] [C1 IPv6#7158fea1.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.252s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.979 Df App[19233:df94a1] [com.apple.network:connection] [C2.1.1.1 IPv6#6d397b06.443 ready socket-flow (unsatisfied (No network route))] event: path:unsatisfied @226.224s, uuid: 0718BCAF-EC12-439C-93A7-966C8F265973
+2026-10-25 01:46:24.979 Df App[19233:df94a1] [com.apple.network:connection] [C2.1.1 Hostname#90977f4f:443 ready resolver (unsatisfied (No network route))] event: path:unsatisfied @226.224s, uuid: 0F77FC62-ED9B-46F2-8BF3-34DF59921287
+2026-10-25 01:46:24.979 Df App[19233:df94a1] [com.apple.network:connection] [C2.1 Hostname#90977f4f:443 ready transform (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.224s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.979 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.224s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.980 Df App[19233:df94a1] [com.apple.network:connection] [C1.1.1 IPv6#7158fea1.443 ready socket-flow (unsatisfied (No network route))] event: path:unsatisfied @226.253s, uuid: E9A902B3-D5FE-4182-BA37-4A9614B12758
+2026-10-25 01:46:24.980 Df App[19233:df94a1] [com.apple.network:connection] [C1.1 Hostname#0c1cb080:443 ready resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.253s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.980 Df App[19233:df94a1] [com.apple.network:connection] [C1 IPv6#7158fea1.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.253s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:24.980 Df App[19233:df94a1] [com.apple.network:connection] [C2.1.1 Hostname#90977f4f:443 ready resolver (unsatisfied (No network route))] event: path:unsatisfied @226.225s, uuid: 0F77FC62-ED9B-46F2-8BF3-34DF59921287
+2026-10-25 01:46:24.980 Df App[19233:df94a1] [com.apple.network:connection] [C2.1 Hostname#90977f4f:443 ready transform (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.225s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:24.980 Df App[19233:df94a1] [com.apple.network:connection] [C2 IPv6#6d397b06.443 ready parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @226.225s, uuid: 39A9042C-5D90-4036-B09D-CB383705E435
+2026-10-25 01:46:26.200 Df App[19233:df9390] [com.apple.CFNetwork:Default] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> resuming, timeouts(60.0, 604800.0) qos(0x19) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-10-25 01:46:26.204 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 0: creating secure tcp or quic connection
+2026-10-25 01:46:26.205 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 7: enabling TLS
+2026-10-25 01:46:26.205 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 7: starting, TC(0x0)
+2026-10-25 01:46:26.205 Df App[19233:df9390] [com.apple.network:connection] [C7 99E71EB2-CCA1-45DF-BC71-8F2F596D4ED4 Hostname#0c1cb080:443 quic-connection, url: https://a-better-me.stf.lol/api/sync, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{B81BA41C-9738-4315-A201-67347CA60CC7}{(null)}{Y}{2}{0x0} (private), proc: 78523833-FC1D-332C-A00E-E79BACB20214, delegated upid: 0] start
+2026-10-25 01:46:26.205 Df App[19233:df9390] [com.apple.network:connection] [C7 Hostname#0c1cb080:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-10-25 01:46:26.206 Df App[19233:df9390] [com.apple.network:connection] [C7 Hostname#0c1cb080:443 waiting parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.001s, uuid: 58D93277-38A9-4CDD-BC12-EAE14EA645FE
+2026-10-25 01:46:26.206 Df App[19233:df9390] [com.apple.network:connection] [C7 Hostname#0c1cb080:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.001s
+2026-10-25 01:46:26.206 Df App[19233:df9390] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C7] reporting state preparing
+2026-10-25 01:46:26.207 Df App[19233:df9390] [com.apple.network:connection] [C7 Hostname#0c1cb080:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_child @0.001s
+2026-10-25 01:46:26.207 Df App[19233:df9390] [com.apple.network:connection] [C7.1 Hostname#0c1cb080:443 initial path ((null))] event: path:start @0.001s
+2026-10-25 01:46:26.212 Df App[19233:df9390] [com.apple.network:connection] [C7.1 Hostname#0c1cb080:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.006s, uuid: 58D93277-38A9-4CDD-BC12-EAE14EA645FE
+2026-10-25 01:46:26.212 Df App[19233:df9390] [com.apple.network:connection] [C7.1 Hostname#0c1cb080:443 in_progress transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: transform:start @0.006s
+2026-10-25 01:46:26.212 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1 Hostname#0c1cb080:443 initial path ((null))] event: path:start @0.007s
+2026-10-25 01:46:26.213 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1 Hostname#0c1cb080:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.008s, uuid: 4F1B0867-CA3A-4824-A902-76AB7689E339
+2026-10-25 01:46:26.214 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1 Hostname#0c1cb080:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:start_dns @0.008s
+2026-10-25 01:46:26.215 Df App[19233:df9390] [com.apple.CFNetwork:Default] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> setting up Connection 7
+2026-10-25 01:46:26.320 Df App[19233:df9390] [com.apple.network:connection] [C7.1.2 Hostname#0c1cb080:443 initial path ((null))] event: path:start @0.115s
+2026-10-25 01:46:26.320 Df App[19233:df9390] [com.apple.network:connection] [C7.1.2 Hostname#0c1cb080:443 waiting path (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @0.115s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:26.320 Df App[19233:df9390] [com.apple.network:connection] [C7.1.2 Hostname#0c1cb080:443 in_progress resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:start_dns @0.115s
+2026-10-25 01:46:26.321 Df App[19233:df9390] [com.apple.network:connection] [C7.1.2 Hostname#0c1cb080:443 failed resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:receive_dns @0.116s
+2026-10-25 01:46:26.322 E  App[19233:df9390] [com.apple.network:connection] nw_endpoint_transform_start_next_child [C7.1 Hostname#0c1cb080:443 in_progress transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] no child at index 2
+2026-10-25 01:46:28.223 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1 Hostname#0c1cb080:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:dns_stall @2.018s
+2026-10-25 01:46:28.649 Df App[19233:df9390] [com.apple.network:connection] nw_endpoint_resolver_update [C7.1.1 Hostname#0c1cb080:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#7158fea1.443
+2026-10-25 01:46:28.649 Df App[19233:df9390] [com.apple.network:connection] nw_endpoint_resolver_update [C7.1.1 Hostname#0c1cb080:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#2ca6944f.443
+2026-10-25 01:46:28.649 Df App[19233:df9390] [com.apple.network:connection] nw_endpoint_resolver_update [C7.1.1 Hostname#0c1cb080:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#2ae9671e:443
+2026-10-25 01:46:28.649 Df App[19233:df9390] [com.apple.network:connection] nw_endpoint_resolver_update [C7.1.1 Hostname#0c1cb080:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#8d44b6e3:443
+2026-10-25 01:46:28.649 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1 Hostname#0c1cb080:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:receive_dns @2.444s
+2026-10-25 01:46:28.649 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.1 IPv6#7158fea1.443 initial path ((null))] event: path:start @2.444s
+2026-10-25 01:46:28.650 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.1 IPv6#7158fea1.443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @2.445s, uuid: 9006DF73-EC7F-4BC4-B46A-F1CF5503177A
+2026-10-25 01:46:28.657 Df App[19233:df9390] [com.apple.network:quic] quic_conn_initialize_inner [C7.1.1.1:2] [-079ae6691540fef1] created QUIC connection (spin bit enabled)
+2026-10-25 01:46:28.657 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.1 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @2.452s
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:quic] quic_crypto_new_flow [C7.1.1.1:2] [-079ae6691540fef1] TLS stream is: [C8]
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:connection] [C8 412EA6CA-F40D-4111-806E-F5ED1ADEDBEC IPv6#7158fea1.443 quic-connection, tls, url: https://a-better-me.stf.lol/api/sync, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{B81BA41C-9738-4315-A201-67347CA60CC7}{(null)}{Y}{2}{0x0} (private), proc: 78523833-FC1D-332C-A00E-E79BACB20214, delegated upid: 0] start
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:connection] [C8 IPv6#7158fea1.443 initial socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:start @0.000s
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:connection] [C8 IPv6#7158fea1.443 waiting socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 9006DF73-EC7F-4BC4-B46A-F1CF5503177A
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:connection] [C8 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C8] reporting state preparing
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:connection] nw_flow_connected [C8 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (quic-connection)
+2026-10-25 01:46:28.658 Df App[19233:df9390] [com.apple.network:connection] [C8 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @0.000s
+2026-10-25 01:46:28.659 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_session_apply_protocol_options_for_transport_block_invoke_2(2411) [C8:1][0x112701960] TLS configured [server(0) min_version(0x0304) max_version(0x0304) name(redacted) tickets(false) false_start(false) enforce_ev(false) enforce_ats(false) ats_non_pfs_ciphersuite_allowed(false) cc_mode_enforced(false) ech(false) pqtls(true), pake(false) skip_ats_trust(false)]
+2026-10-25 01:46:28.659 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2923) [C8:1][0x112701960] Client handshake started
+2026-10-25 01:46:28.659 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS client enter_early_data
+2026-10-25 01:46:28.659 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS client read_server_hello
+2026-10-25 01:46:28.659 Df App[19233:df9390] [com.apple.network:connection] nw_socket_handle_socket_event [C7.1.1.1:2] Socket received CONNECTED event
+2026-10-25 01:46:28.769 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.2 IPv6#2ca6944f.443 initial path ((null))] event: path:start @2.563s
+2026-10-25 01:46:28.770 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.2 IPv6#2ca6944f.443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @2.564s, uuid: 3638ED9D-2A97-4766-A96C-13146F3EB48E
+2026-10-25 01:46:28.771 Df App[19233:df9390] [com.apple.network:quic] quic_conn_initialize_inner [C7.1.1.2:2] [-ad0b07d1ffd50452] created QUIC connection (spin bit enabled)
+2026-10-25 01:46:28.771 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.2 IPv6#2ca6944f.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @2.566s
+2026-10-25 01:46:28.772 Df App[19233:df9390] [com.apple.network:quic] quic_crypto_new_flow [C7.1.1.2:2] [-ad0b07d1ffd50452] TLS stream is: [C9]
+2026-10-25 01:46:28.772 Df App[19233:df9390] [com.apple.network:connection] [C9 28A97A7C-0C60-4417-8481-F2F879CF8C39 IPv6#2ca6944f.443 quic-connection, tls, url: https://a-better-me.stf.lol/api/sync, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{B81BA41C-9738-4315-A201-67347CA60CC7}{(null)}{Y}{2}{0x0} (private), proc: 78523833-FC1D-332C-A00E-E79BACB20214, delegated upid: 0] start
+2026-10-25 01:46:28.773 Df App[19233:df9390] [com.apple.network:connection] [C9 IPv6#2ca6944f.443 initial socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:start @0.000s
+2026-10-25 01:46:28.773 Df App[19233:df9390] [com.apple.network:connection] [C9 IPv6#2ca6944f.443 waiting socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 3638ED9D-2A97-4766-A96C-13146F3EB48E
+2026-10-25 01:46:28.773 Df App[19233:df9390] [com.apple.network:connection] [C9 IPv6#2ca6944f.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-10-25 01:46:28.773 Df App[19233:df9390] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C9] reporting state preparing
+2026-10-25 01:46:28.773 Df App[19233:df9390] [com.apple.network:connection] nw_flow_connected [C9 IPv6#2ca6944f.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (quic-connection)
+2026-10-25 01:46:28.773 Df App[19233:df9390] [com.apple.network:connection] [C9 IPv6#2ca6944f.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @0.000s
+2026-10-25 01:46:28.773 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_session_apply_protocol_options_for_transport_block_invoke_2(2411) [C9:1][0x112703260] TLS configured [server(0) min_version(0x0304) max_version(0x0304) name(redacted) tickets(false) false_start(false) enforce_ev(false) enforce_ats(false) ats_non_pfs_ciphersuite_allowed(false) cc_mode_enforced(false) ech(false) pqtls(true), pake(false) skip_ats_trust(false)]
+2026-10-25 01:46:28.774 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2923) [C9:1][0x112703260] Client handshake started
+2026-10-25 01:46:28.774 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C9:1][0x112703260] Client handshake state: TLS client enter_early_data
+2026-10-25 01:46:28.774 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C9:1][0x112703260] Client handshake state: TLS client read_server_hello
+2026-10-25 01:46:28.774 Df App[19233:df9390] [com.apple.network:connection] nw_socket_handle_socket_event [C7.1.1.2:2] Socket received CONNECTED event
+2026-10-25 01:46:28.817 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client read_hello_retry_request
+2026-10-25 01:46:28.817 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client read_server_hello
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client read_encrypted_extensions
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client read_certificate_request
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client read_server_certificate
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client read_server_certificate_verify
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async(2347) [C8:1][0x112701960] Performing external trust evaluation
+2026-10-25 01:46:28.819 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.819 A  App[19233:df9390] (Security) SecKeyCopyAttributes
+2026-10-25 01:46:28.819 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external(2332) [C8:1][0x112701960] Asyncing for external verify block
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 7: asked to evaluate TLS Trust
+2026-10-25 01:46:28.819 Df App[19233:df9390] [com.apple.CFNetwork:Default] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> auth completion disp=1 cred=0x0
+2026-10-25 01:46:28.820 Df App[19233:df9390] [com.apple.securityd:trust] (Trust 0x1126a4a80) No pending evals, starting
+2026-10-25 01:46:28.820 A  App[19233:df9390] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-10-25 01:46:28.820 Df App[19233:df9390] [com.apple.xpc:connection] [0x1077f97c0] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-10-25 01:46:28.820 Df App[19233:df9390] [com.apple.securityd:trust] (Trust 0x1126a4a80) Completed async eval kickoff
+2026-10-25 01:46:28.823 Df App[19233:df9390] [com.apple.securityd:trust] (Trust 0x1126a4a80) trustd returned 4
+2026-10-25 01:46:28.823 Df App[19233:df9390] [com.apple.CFNetwork:Default] System Trust Evaluation yielded status(0)
+2026-10-25 01:46:28.823 Df App[19233:df9390] [com.apple.securityd:trust] (Trust 0x1126a7780) No pending evals, starting
+2026-10-25 01:46:28.823 A  App[19233:df9390] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-10-25 01:46:28.823 Df App[19233:df9390] [com.apple.xpc:connection] [0x1077f9180] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-10-25 01:46:28.823 Df App[19233:df9390] [com.apple.securityd:trust] (Trust 0x1126a7780) Completed async eval kickoff
+2026-10-25 01:46:28.823 Df App[19233:df9390] [com.apple.xpc:connection] [0x1077f97c0] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.securityd:trust] (Trust 0x1126a7780) trustd returned 4
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 7: TLS Trust result 0
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external_block_invoke_3(2226) [C8:1][0x112701960] Returning from external verify block with result: true
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_certificate_verify_callback(2528) [C8:1][0x112701960] Certificate verification result: OK
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client read_server_finished
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client send_end_of_early_data
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client send_client_encrypted_extensions
+2026-10-25 01:46:28.825 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client send_client_certificate
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client complete_second_flight
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyAttributes
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyAttributes
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS 1.3 client done
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS client finish_client_handshake
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2940) [C8:1][0x112701960] Client handshake state: TLS client done
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_info_handler(2929) [C8:1][0x112701960] Client handshake done
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyAttributes
+2026-10-25 01:46:28.826 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:boringssl] nw_protocol_boringssl_signal_connected(907) [C8:1][0x112701960] TLS connected [server(0) version(0x0304) ciphersuite(TLS_AES_256_GCM_SHA384) group(0x11ec) signature_alg(0x0403) alpn(h3) resumed(0) offered_ticket(0) in_early_data(0) early_data_accepted(0) false_started(0) ocsp_received(0) sct_received(0) connect_time(167ms) flight_time(159ms) rtt(158ms) write_stalls(0) read_stalls(5) pake(0x0000)]
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:connection] nw_flow_connected [C8 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (tls)
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:connection] [C8 IPv6#7158fea1.443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_connect @0.168s
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C8] reporting state ready
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.xpc:connection] [0x1077f9180] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:quic] quic_pmtud_restart [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] PMTUD enabled, max PMTU: 1398, header size: 48, current PMTU 1248
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:quic] quic_crypto_tls_ready_inner [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] QUIC connection established in 168.728 ms, RTT 147.057 ms
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:quic] quic_crypto_tls_ready_inner [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] server does NOT support migration, migration feature disabled
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:connection] nw_flow_connected [C7.1.1.1 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (quic-connection)
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.1 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @2.621s
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:connection] nw_flow_connected [C7.1.1.1 IPv6#7158fea1.443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (CFNetworkConnection-295036007)
+2026-10-25 01:46:28.826 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.1 IPv6#7158fea1.443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @2.621s
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1 Hostname#0c1cb080:443 ready resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @2.621s
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] [C7.1 Hostname#0c1cb080:443 ready transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @2.621s
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] [C9 28A97A7C-0C60-4417-8481-F2F879CF8C39 IPv6#2ca6944f.443 quic-connection, tls, url: https://a-better-me.stf.lol/api/sync, definite, attribution: developer] cancel
+2026-10-25 01:46:28.827 E  App[19233:df9390] [com.apple.network:connection] nw_connection_copy_protocol_metadata_internal_block_invoke [C9] Client called nw_connection_copy_protocol_metadata_internal on unconnected nw_connection
+2026-10-25 01:46:28.827 E  App[19233:df9390] [com.apple.network:connection] nw_connection_copy_protocol_metadata_internal_block_invoke [C9] Client called nw_connection_copy_protocol_metadata_internal on unconnected nw_connection
+2026-10-25 01:46:28.827 E  App[19233:df9390] [com.apple.network:connection] nw_connection_copy_connected_local_endpoint_block_invoke [C9] Client called nw_connection_copy_connected_local_endpoint on unconnected nw_connection
+2026-10-25 01:46:28.827 E  App[19233:df9390] [com.apple.network:connection] nw_connection_copy_connected_remote_endpoint_block_invoke [C9] Client called nw_connection_copy_connected_remote_endpoint on unconnected nw_connection
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] [C9 28A97A7C-0C60-4417-8481-F2F879CF8C39 IPv6#2ca6944f.443 quic-connection, tls, url: https://a-better-me.stf.lol/api/sync, definite, attribution: developer] cancelled
+	[C9 3638ED9D-2A97-4766-A96C-13146F3EB48E <NULL><-><NULL>]
+	Connected Path: (null)
+	Duration: 0.054s, QUIC @0.000s took 0.000s,  took 4294967.295s
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C9] reporting state cancelled
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:quic] quic_conn_log_summary [C7.1.1.2:2] [-ad0b07d1ffd50452] 
+	Connection attempts: 1, RETRY received: no, PTOs: 0
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] nw_flow_connected [C7 IPv6#7158fea1.443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (endpoint_flow)
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] [C7 IPv6#7158fea1.443 ready parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_connect @2.622s
+2026-10-25 01:46:28.827 Df App[19233:df9390] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C7] reporting state ready
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:quic] quic_migration_path_event_block_invoke [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] path 5ce7c1844bf2911f over en0 received event established
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:quic] quic_migration_evaluate_primary [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] promoted path 0x111c20a80 over en0 to primary
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:] nw_protocol_instance_report_ready [C7.1.1.1:2] Calling notify with interface en0 for flow_registration E61FB85B-394A-4C19-BE89-167FD3BDB809
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1.1 IPv6#7158fea1.443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:migrated @2.623s, uuid: 9006DF73-EC7F-4BC4-B46A-F1CF5503177A
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:connection] [C7.1.1 Hostname#0c1cb080:443 ready resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:migrated @2.623s, uuid: 4F1B0867-CA3A-4824-A902-76AB7689E339
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:connection] [C7.1 Hostname#0c1cb080:443 ready transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:migrated @2.623s, uuid: 58D93277-38A9-4CDD-BC12-EAE14EA645FE
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:connection] [C7 IPv6#7158fea1.443 ready parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:migrated @2.623s, uuid: 58D93277-38A9-4CDD-BC12-EAE14EA645FE
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:quic] quic_migration_evaluate [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] evaluating path migration
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:quic] quic_migration_evaluate_block_invoke [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] path 5ce7c1844bf2911f state validated (0), ifname en0, primary? 1, initial? 1, fallback? 0, preferred? 0 lossy? 0
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.network:quic] quic_migration_evaluate [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] current path is usable, no strong fallback or we are probing
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 7: connected successfully
+2026-10-25 01:46:28.828 E  App[19233:df9390] [com.apple.network:connection] nw_connection_copy_connected_local_endpoint_block_invoke [C7] Connection has no local endpoint
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 7: TLS handshake complete
+2026-10-25 01:46:28.828 E  App[19233:df9390] [com.apple.network:connection] nw_connection_copy_connected_local_endpoint_block_invoke [C7] Connection has no local endpoint
+2026-10-25 01:46:28.828 Df App[19233:df9390] [com.apple.CFNetwork:Default] Connection 7: ready C(N) E(N)
+2026-10-25 01:46:28.829 Df App[19233:df9390] [com.apple.network:connection] [C7] event: client:connection_reused @2.623s
+2026-10-25 01:46:28.829 Df App[19233:df9390] [com.apple.CFNetwork:Default] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> now using Connection 7
+2026-10-25 01:46:28.829 Df App[19233:df9390] [com.apple.network:quic] quic_path_destroy [C7.1.1.2:2] [-ad0b07d1ffd50452] destroying path 0x111c1e140
+2026-10-25 01:46:28.829 Df App[19233:df9390] [com.apple.cfnetwork:h3stream] 0x1126964d8 ID=0 Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> sent request, body S 87
+2026-10-25 01:46:28.852 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.852 A  App[19233:df9390] (Security) SecKeyCopyAttributes
+2026-10-25 01:46:28.852 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.852 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_new_session_handler(1830) [C8:1][0x112701960] Asyncing for session update block
+2026-10-25 01:46:28.852 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.852 A  App[19233:df9390] (Security) SecKeyCopyAttributes
+2026-10-25 01:46:28.852 A  App[19233:df9390] (Security) SecKeyCopyPublicBytes
+2026-10-25 01:46:28.852 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_new_session_handler(1830) [C8:1][0x112701960] Asyncing for session update block
+2026-10-25 01:46:28.852 Df App[19233:df9390] [com.apple.network:boringssl] nw_protocol_boringssl_signal_connected(907) [C8:1][0x112701960] TLS connected [server(0) version(0x0304) ciphersuite(TLS_AES_256_GCM_SHA384) group(0x11ec) signature_alg(0x0403) alpn(h3) resumed(0) offered_ticket(0) in_early_data(0) early_data_accepted(0) false_started(0) ocsp_received(0) sct_received(0) connect_time(167ms) flight_time(159ms) rtt(158ms) write_stalls(0) read_stalls(5) pake(0x0000)]
+2026-10-25 01:46:28.852 Df App[19233:df9390] [com.apple.network:connection] nw_flow_connected [C8 IPv6#7158fea1.443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (tls)
+2026-10-25 01:46:28.852 Df App[19233:df9390] [com.apple.network:quic] quic_stream_create_inbound [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] creating inbound stream 3
+2026-10-25 01:46:28.853 Df App[19233:df9390] [com.apple.network:quic] quic_stream_create_inbound [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] creating inbound stream 7
+2026-10-25 01:46:28.853 Df App[19233:df9390] [com.apple.network:quic] quic_stream_create_inbound [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] creating inbound stream 11
+2026-10-25 01:46:28.853 Df App[19233:df9390] [com.apple.network:quic] quic_stream_create_inbound [C7.1.1.1:2] [-0154c44f4db5deae3250584f2fb2ddae32854d35] creating inbound stream 15
+2026-10-25 01:46:28.853 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_new_session_handler_block_invoke(1833) [C8:1][0x112701960] Returning from session update block
+2026-10-25 01:46:28.853 Df App[19233:df9390] [com.apple.network:boringssl] boringssl_context_new_session_handler_block_invoke(1833) [C8:1][0x112701960] Returning from session update block
+2026-10-25 01:46:29.165 Df App[19233:df9390] [com.apple.cfnetwork:h3stream] 0x1126964d8 ID=0 Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> received response, status 200 content U
+2026-10-25 01:46:29.165 A  App[19233:df9390] (Security) SecTrustEvaluateIfNecessary
+2026-10-25 01:46:29.165 Df App[19233:df9390] [com.apple.xpc:connection] [0x1077fae40] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-10-25 01:46:29.168 Df App[19233:df9390] [com.apple.xpc:connection] [0x1077fae40] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-10-25 01:46:29.168 Df App[19233:df9390] [com.apple.CFNetwork:Default] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> response ended
+2026-10-25 01:46:29.168 Df App[19233:df9390] [com.apple.network:connection] [C7] event: client:connection_idle @2.962s
+2026-10-25 01:46:29.168 Df App[19233:df9390] [com.apple.CFNetwork:Default] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> done using Connection 7
+2026-10-25 01:46:29.168 Df App[19233:df977f] [com.apple.CFNetwork:Summary] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> summary for task success {transaction_duration_ms=2967, response_status=200, connection=7, protocol="h3", domain_lookup_duration_ms=2436, connect_duration_ms=170, secure_connection_duration_ms=168, private_relay=false, request_start_ms=2627, request_duration_ms=0, response_start_ms=2962, response_duration_ms=4, request_bytes=347, request_throughput_kbps=5140, response_bytes=474, response_throughput_kbps=799, cache_hit=true}
+2026-10-25 01:46:29.168 Df App[19233:df977f] [com.apple.CFNetwork:Default] Task <C297D348-5BDF-491E-BF6B-66CADEB508D2>.<12> finished successfully
+2026-10-25 01:46:38.956 Df App[19233:df97ef] [com.apple.CFNetwork:Default] Connection 2: cleaning up
+2026-10-25 01:46:38.956 Df App[19233:df97ef] [com.apple.network:connection] [C2 39DECF7D-8C04-44D9-B570-1D3094EECE78 Hostname#90977f4f:443 quic-connection, url hash: fb3600d1, definite, attribution: developer] cancel
+2026-10-25 01:46:38.956 Df App[19233:df97ef] [com.apple.network:connection] [C2 39DECF7D-8C04-44D9-B570-1D3094EECE78 Hostname#90977f4f:443 quic-connection, url hash: fb3600d1, definite, attribution: developer] cancelled
+	[C2.1.1.1 0718BCAF-EC12-439C-93A7-966C8F265973 2603:80a0:3940:de16:ac2f:cae7:7697:82f3.51509<->IPv6#6d397b06.443]
+	Connected Path: unsatisfied (No network route)
+	Privacy Stance: Not Eligible
+	Duration: 240.201s, DNS @0.004s took 0.004s, TCP @0.011s took 0.035s, TLS 1.3 took 0.044s
+	bytes in/out: 5679/2568, packets in/out: 4/8, rtt: 0.045s, retransmitted bytes: 0, out-of-order bytes: 0
+	ecn packets sent/acked/marked/lost: 0/0/0/0
+2026-10-25 01:46:38.956 Df App[19233:df97ef] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C2] reporting state cancelled
+2026-10-25 01:46:38.956 Df App[19233:df97ef] [com.apple.CFNetwork:Default] Connection 2: done
+2026-10-25 01:46:41.271 Df App[19233:df99b9] [com.apple.network:connection] nw_socket_handle_socket_event [C1.1.1:3] Socket received TIMEOUT event
+2026-10-25 01:46:41.272 Df App[19233:df99b9] [com.apple.network:connection] nw_socket_handle_socket_event [C1.1.1:3] Socket received DISCONNECTED event
+2026-10-25 01:46:41.272 E  App[19233:df99b9] [com.apple.network:connection] nw_socket_handle_socket_event [C1.1.1:3] Socket SO_ERROR [65: No route to host]
+2026-10-25 01:46:41.272 Df App[19233:df99b9] [com.apple.network:boringssl] nw_protocol_boringssl_error(2378) [C1.1.1:2][0x10f7f25e0] Lower protocol stack error post TLS handshake. [65: No route to host]
+2026-10-25 01:46:41.272 Df App[19233:df99b9] [com.apple.network:boringssl] nw_protocol_boringssl_error(2396) [C1.1.1:2][0x10f7f25e0] Propagating error up the stack
+2026-10-25 01:46:41.272 E  App[19233:df99b9] [com.apple.network:connection] nw_read_request_report [C1] Receive failed with error "No route to host"
+2026-10-25 01:46:41.272 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 1: read-side closed
+2026-10-25 01:46:41.272 E  App[19233:df99fd] [com.apple.cfnetwork:websocket] Read completed with an error No route to host
+2026-10-25 01:46:41.272 E  App[19233:df99b9] [com.apple.network:connection] nw_protocol_socket_reset_linger [C1.1.1:3] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-10-25 01:46:41.273 Df App[19233:df99b9] [com.apple.network:connection] [C1.1.1 IPv6#7158fea1.443 failed socket-flow (unsatisfied (No network route))] event: flow:disconnect @242.546s, error No route to host
+2026-10-25 01:46:41.273 Df App[19233:df99b9] [com.apple.network:connection] [C1.1 Hostname#0c1cb080:443 failed resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:disconnect @242.547s
+2026-10-25 01:46:41.273 Df App[19233:df99b9] [com.apple.network:connection] [C1 IPv6#7158fea1.443 failed parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:disconnect @242.547s
+2026-10-25 01:46:41.273 Df App[19233:df99fd] [com.apple.CFNetwork:Summary] Task <25C0D31C-1037-4DF7-B751-BC8A1715B0A7>.<1> summary for task failure {transaction_duration_ms=242579, response_status=101, connection=1, protocol="http/1.1", domain_lookup_duration_ms=4, connect_duration_ms=72, secure_connection_duration_ms=37, private_relay=false, request_start_ms=124, request_duration_ms=0, response_start_ms=199, response_duration_ms=4, request_bytes=415, request_throughput_kbps=31612, response_bytes=631, response_throughput_kbps=1149, cache_hit=false}
+2026-10-25 01:46:41.273 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C1] reporting state failed error No route to host
+2026-10-25 01:46:41.273 E  App[19233:df99fd] [com.apple.CFNetwork:Default] Task <25C0D31C-1037-4DF7-B751-BC8A1715B0A7>.<1> finished with error [65] Error Domain=NSPOSIXErrorDomain Code=65 "No route to host" UserInfo={NSDescription=No route to host, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalWebSocketTask <25C0D31C-1037-4DF7-B751-BC8A1715B0A7>.<1>"
+), _NSURLErrorFailingURLSessionTaskErrorKey=LocalWebSocketTask <25C0D31C-1037-4DF7-B751-BC8A1715B0A7>.<1>}
+2026-10-25 01:46:41.274 Df App[19233:df99b9] [com.apple.network:connection] [C1 IPv6#7158fea1.443 failed parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:disconnect @242.547s, error No route to host
+2026-10-25 01:46:41.274 E  App[19233:df99b9] [com.apple.network:connection] nw_flow_add_write_request [C1 IPv6#7158fea1.443 failed parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] cannot accept write requests
+2026-10-25 01:46:41.274 E  App[19233:df99b9] [com.apple.network:connection] nw_write_request_report [C1] Send failed with error "Socket is not connected"
+2026-10-25 01:46:41.274 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 1: cleaning up
+2026-10-25 01:46:41.274 Df App[19233:df99b9] [com.apple.network:connection] [C1 BCD453B7-9987-474B-B8E8-09AD8C1BF64B Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancel
+2026-10-25 01:46:41.274 Df App[19233:df99b9] [com.apple.network:connection] [C1 BCD453B7-9987-474B-B8E8-09AD8C1BF64B Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancelled
+	[C1.1.1 E9A902B3-D5FE-4182-BA37-4A9614B12758 2603:80a0:3940:de16:ac2f:cae7:7697:82f3.51508<->IPv6#7158fea1.443]
+	Connected Path: unsatisfied (No network route)
+	Privacy Stance: Not Eligible
+	Duration: 242.548s, DNS @0.012s took 0.004s, TCP @0.171s took 0.029s, TLS 1.3 took 0.037s
+	bytes in/out: 0/0, packets in/out: 0/0, rtt: 0.000s, retransmitted bytes: 0, out-of-order bytes: 0
+	ecn packets sent/acked/marked/lost: 0/0/0/0
+2026-10-25 01:46:41.275 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C1] reporting state cancelled error No route to host
+2026-10-25 01:46:41.275 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 1: done
+2026-10-25 01:46:43.284 Df App[19233:df4a55] [com.apple.CFNetwork:Default] Task <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13> resuming, timeouts(60.0, 604800.0) qos(0x21) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-10-25 01:46:43.284 Df App[19233:df99fd] [com.apple.CFNetwork:Default] Connection 10: enabling TLS
+2026-10-25 01:46:43.284 Df App[19233:df99fd] [com.apple.CFNetwork:Default] Connection 10: starting, TC(0x0)
+2026-10-25 01:46:43.284 Df App[19233:df99fd] [com.apple.network:connection] [C10 DB237C6A-F694-4A7E-9DD7-A8ABC012FC27 Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{B81BA41C-9738-4315-A201-67347CA60CC7}{(null)}{Y}{2}{0x0} (private), proc: 78523833-FC1D-332C-A00E-E79BACB20214, delegated upid: 0] start
+2026-10-25 01:46:43.284 Df App[19233:df99fd] [com.apple.network:connection] [C10 Hostname#0c1cb080:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-10-25 01:46:43.284 Df App[19233:df99fd] [com.apple.network:connection] [C10 Hostname#0c1cb080:443 waiting parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @0.000s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C10] reporting state waiting
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10 Hostname#0c1cb080:443 in_progress parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C10] reporting state preparing
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10 Hostname#0c1cb080:443 in_progress parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:start_child @0.000s
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10.1 Hostname#0c1cb080:443 initial path ((null))] event: path:start @0.000s
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10.1 Hostname#0c1cb080:443 waiting path (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @0.000s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10.1 Hostname#0c1cb080:443 in_progress resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:start_dns @0.000s
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.CFNetwork:Default] Task <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13> setting up Connection 10
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.CFNetwork:Default] Connection 10: is waiting to connect, reason -1
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10.1 Hostname#0c1cb080:443 failed resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:receive_dns @0.000s
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10 Hostname#0c1cb080:443 failed parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:child_failed @0.000s
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C10] reporting state failed error Network is down
+2026-10-25 01:46:43.285 E  App[19233:df99fd] [com.apple.CFNetwork:Default] Connection 10: received failure notification
+2026-10-25 01:46:43.285 E  App[19233:df99fd] [com.apple.CFNetwork:Default] Connection 10: failed to connect 1:50, reason -1
+2026-10-25 01:46:43.285 E  App[19233:df99fd] [com.apple.CFNetwork:Default] Connection 10: encountered error(1:50)
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.CFNetwork:Default] Connection 10: cleaning up
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.CFNetwork:Summary] Connection 10: summary for unused connection {protocol="(null)", domain_lookup_duration_ms=0, connect_duration_ms=0, secure_connection_duration_ms=0, private_relay=false, idle_duration_ms=0}
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10 DB237C6A-F694-4A7E-9DD7-A8ABC012FC27 Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancel
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] [C10 Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancelled
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C10] reporting state cancelled
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.CFNetwork:Default] Task <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13> can retry(N) with reason(2) for error [1:50]
+2026-10-25 01:46:43.285 E  App[19233:df99fd] [com.apple.CFNetwork:Default] Task <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13> HTTP load failed, 0/0 bytes (error code: -1009 [1:50])
+2026-10-25 01:46:43.285 Df App[19233:df99fd] [com.apple.CFNetwork:Summary] Task <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13> summary for task failure {transaction_duration_ms=1, response_status=-1, connection=10, reused=1, reused_after_ms=0, request_start_ms=0, request_duration_ms=0, response_start_ms=0, response_duration_ms=0, request_bytes=0, request_throughput_kbps=0, response_bytes=0, response_throughput_kbps=0, cache_hit=false}
+2026-10-25 01:46:43.285 E  App[19233:df99fd] [com.apple.CFNetwork:Default] Task <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13> finished with error [-1009] Error Domain=NSURLErrorDomain Code=-1009 "The Internet connection appears to be offline." UserInfo={NSErrorFailingURLStringKey=wss://a-better-me.stf.lol/api/live, NSErrorFailingURLKey=wss://a-better-me.stf.lol/api/live, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalWebSocketTask <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13>"
+), _NSURLErrorFailingURLSessionTaskErrorKey=LocalWebSocketTask <C5E98D8F-73F8-4779-992C-2A4BF093CC92>.<13>, NSLocalizedDescription=The Internet connection appears to be offline.}
+2026-10-25 01:46:47.427 Df App[19233:df4a55] [com.apple.CFNetwork:Default] Task <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14> resuming, timeouts(60.0, 604800.0) qos(0x21) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-10-25 01:46:47.428 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 11: enabling TLS
+2026-10-25 01:46:47.428 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 11: starting, TC(0x0)
+2026-10-25 01:46:47.428 Df App[19233:df99b9] [com.apple.network:connection] [C11 AE35D299-9A97-4CC2-8BB1-030F3622AF28 Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{B81BA41C-9738-4315-A201-67347CA60CC7}{(null)}{Y}{2}{0x0} (private), proc: 78523833-FC1D-332C-A00E-E79BACB20214, delegated upid: 0] start
+2026-10-25 01:46:47.428 Df App[19233:df99b9] [com.apple.network:connection] [C11 Hostname#0c1cb080:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-10-25 01:46:47.428 Df App[19233:df99b9] [com.apple.network:connection] [C11 Hostname#0c1cb080:443 waiting parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @0.000s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:47.428 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C11] reporting state waiting
+2026-10-25 01:46:47.429 Df App[19233:df99b9] [com.apple.network:connection] [C11 Hostname#0c1cb080:443 in_progress parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-10-25 01:46:47.429 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C11] reporting state preparing
+2026-10-25 01:46:47.429 Df App[19233:df99b9] [com.apple.network:connection] [C11 Hostname#0c1cb080:443 in_progress parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:start_child @0.000s
+2026-10-25 01:46:47.429 Df App[19233:df99b9] [com.apple.network:connection] [C11.1 Hostname#0c1cb080:443 initial path ((null))] event: path:start @0.000s
+2026-10-25 01:46:47.429 Df App[19233:df99b9] [com.apple.network:connection] [C11.1 Hostname#0c1cb080:443 waiting path (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @0.000s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:47.429 Df App[19233:df99b9] [com.apple.network:connection] [C11.1 Hostname#0c1cb080:443 in_progress resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:start_dns @0.000s
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Task <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14> setting up Connection 11
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 11: is waiting to connect, reason -1
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.network:connection] [C11.1 Hostname#0c1cb080:443 failed resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:receive_dns @0.001s
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.network:connection] [C11 Hostname#0c1cb080:443 failed parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:child_failed @0.001s
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C11] reporting state failed error Network is down
+2026-10-25 01:46:47.430 E  App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 11: received failure notification
+2026-10-25 01:46:47.430 E  App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 11: failed to connect 1:50, reason -1
+2026-10-25 01:46:47.430 E  App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 11: encountered error(1:50)
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 11: cleaning up
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.CFNetwork:Summary] Connection 11: summary for unused connection {protocol="(null)", domain_lookup_duration_ms=0, connect_duration_ms=0, secure_connection_duration_ms=0, private_relay=false, idle_duration_ms=0}
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.network:connection] [C11 AE35D299-9A97-4CC2-8BB1-030F3622AF28 Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancel
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.network:connection] [C11 Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancelled
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C11] reporting state cancelled
+2026-10-25 01:46:47.430 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Task <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14> can retry(N) with reason(2) for error [1:50]
+2026-10-25 01:46:47.431 E  App[19233:df99b9] [com.apple.CFNetwork:Default] Task <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14> HTTP load failed, 0/0 bytes (error code: -1009 [1:50])
+2026-10-25 01:46:47.431 Df App[19233:df97ef] [com.apple.CFNetwork:Summary] Task <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14> summary for task failure {transaction_duration_ms=3, response_status=-1, connection=11, reused=1, reused_after_ms=0, request_start_ms=0, request_duration_ms=0, response_start_ms=0, response_duration_ms=0, request_bytes=0, request_throughput_kbps=0, response_bytes=0, response_throughput_kbps=0, cache_hit=false}
+2026-10-25 01:46:47.431 E  App[19233:df97ef] [com.apple.CFNetwork:Default] Task <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14> finished with error [-1009] Error Domain=NSURLErrorDomain Code=-1009 "The Internet connection appears to be offline." UserInfo={NSErrorFailingURLStringKey=wss://a-better-me.stf.lol/api/live, NSErrorFailingURLKey=wss://a-better-me.stf.lol/api/live, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalWebSocketTask <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14>"
+), _NSURLErrorFailingURLSessionTaskErrorKey=LocalWebSocketTask <70A6EBDA-5DBA-45DE-9F0F-7A821F701B50>.<14>, NSLocalizedDescription=The Internet connection appears to be offline.}
+2026-10-25 01:46:55.827 Df App[19233:df4a55] [com.apple.CFNetwork:Default] Task <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15> resuming, timeouts(60.0, 604800.0) qos(0x21) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-10-25 01:46:55.829 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 12: enabling TLS
+2026-10-25 01:46:55.829 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 12: starting, TC(0x0)
+2026-10-25 01:46:55.829 Df App[19233:df99b9] [com.apple.network:connection] [C12 AF09050E-5872-4FD0-B22D-0FB157E3182C Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{B81BA41C-9738-4315-A201-67347CA60CC7}{(null)}{Y}{2}{0x0} (private), proc: 78523833-FC1D-332C-A00E-E79BACB20214, delegated upid: 0] start
+2026-10-25 01:46:55.829 Df App[19233:dfab4b] [com.apple.CFNetwork:Default] Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> resuming, timeouts(60.0, 604800.0) qos(0x19) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-10-25 01:46:55.829 Df App[19233:df99b9] [com.apple.network:connection] [C12 Hostname#0c1cb080:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-10-25 01:46:55.829 Df App[19233:df99b9] [com.apple.network:connection] [C12 Hostname#0c1cb080:443 waiting parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @0.000s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:55.830 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C12] reporting state waiting
+2026-10-25 01:46:55.830 Df App[19233:df99b9] [com.apple.network:connection] [C12 Hostname#0c1cb080:443 in_progress parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-10-25 01:46:55.830 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C12] reporting state preparing
+2026-10-25 01:46:55.830 Df App[19233:df99b9] [com.apple.network:connection] [C12 Hostname#0c1cb080:443 in_progress parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:start_child @0.000s
+2026-10-25 01:46:55.830 Df App[19233:df99b9] [com.apple.network:connection] [C12.1 Hostname#0c1cb080:443 initial path ((null))] event: path:start @0.000s
+2026-10-25 01:46:55.830 Df App[19233:df99b9] [com.apple.network:connection] [C12.1 Hostname#0c1cb080:443 waiting path (unsatisfied (No network route), uses wifi, LQM: unknown)] event: path:unsatisfied @0.000s, uuid: 19790D41-AABA-44DF-ABBC-E1797EFD2586
+2026-10-25 01:46:55.830 Df App[19233:df99b9] [com.apple.network:connection] [C12.1 Hostname#0c1cb080:443 in_progress resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:start_dns @0.000s
+2026-10-25 01:46:55.831 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Task <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15> setting up Connection 12
+2026-10-25 01:46:55.831 Df App[19233:df99b9] [com.apple.network:connection] [C7] event: client:connection_reused @29.626s
+2026-10-25 01:46:55.831 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> now using Connection 7
+2026-10-25 01:46:55.832 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 12: is waiting to connect, reason -1
+2026-10-25 01:46:55.832 Df App[19233:df99b9] [com.apple.network:connection] [C12.1 Hostname#0c1cb080:443 failed resolver (unsatisfied (No network route), uses wifi, LQM: unknown)] event: resolver:receive_dns @0.002s
+2026-10-25 01:46:55.832 Df App[19233:df99b9] [com.apple.network:connection] [C12 Hostname#0c1cb080:443 failed parent-flow (unsatisfied (No network route), uses wifi, LQM: unknown)] event: flow:child_failed @0.002s
+2026-10-25 01:46:55.832 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C12] reporting state failed error Network is down
+2026-10-25 01:46:55.833 Df App[19233:df99b9] [com.apple.cfnetwork:h3stream] 0x10f2924d8 ID=4 Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> sent request, body S 87
+2026-10-25 01:46:55.833 E  App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 12: received failure notification
+2026-10-25 01:46:55.833 E  App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 12: failed to connect 1:50, reason -1
+2026-10-25 01:46:55.833 E  App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 12: encountered error(1:50)
+2026-10-25 01:46:55.833 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Connection 12: cleaning up
+2026-10-25 01:46:55.833 Df App[19233:df99b9] [com.apple.CFNetwork:Summary] Connection 12: summary for unused connection {protocol="(null)", domain_lookup_duration_ms=0, connect_duration_ms=0, secure_connection_duration_ms=0, private_relay=false, idle_duration_ms=0}
+2026-10-25 01:46:55.833 Df App[19233:df99b9] [com.apple.network:connection] [C12 AF09050E-5872-4FD0-B22D-0FB157E3182C Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancel
+2026-10-25 01:46:55.833 Df App[19233:df99b9] [com.apple.network:connection] [C12 Hostname#0c1cb080:443 tcp, tls, url: wss://a-better-me.stf.lol/api/live, definite, attribution: developer] cancelled
+2026-10-25 01:46:55.833 Df App[19233:df99b9] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C12] reporting state cancelled
+2026-10-25 01:46:55.833 Df App[19233:df99b9] [com.apple.CFNetwork:Default] Task <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15> can retry(N) with reason(2) for error [1:50]
+2026-10-25 01:46:55.833 E  App[19233:dfab4a] [com.apple.CFNetwork:Default] Task <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15> HTTP load failed, 0/0 bytes (error code: -1009 [1:50])
+2026-10-25 01:46:55.833 Df App[19233:dfab4a] [com.apple.CFNetwork:Summary] Task <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15> summary for task failure {transaction_duration_ms=5, response_status=-1, connection=12, reused=1, reused_after_ms=0, request_start_ms=0, request_duration_ms=0, response_start_ms=0, response_duration_ms=0, request_bytes=0, request_throughput_kbps=0, response_bytes=0, response_throughput_kbps=0, cache_hit=false}
+2026-10-25 01:46:55.833 E  App[19233:dfab4a] [com.apple.CFNetwork:Default] Task <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15> finished with error [-1009] Error Domain=NSURLErrorDomain Code=-1009 "The Internet connection appears to be offline." UserInfo={NSErrorFailingURLStringKey=wss://a-better-me.stf.lol/api/live, NSErrorFailingURLKey=wss://a-better-me.stf.lol/api/live, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalWebSocketTask <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15>"
+), _NSURLErrorFailingURLSessionTaskErrorKey=LocalWebSocketTask <C964703F-48C6-4DBD-A9BE-2A614F07DE14>.<15>, NSLocalizedDescription=The Internet connection appears to be offline.}
+2026-10-25 01:46:55.927 Df App[19233:dfab4c] [com.apple.cfnetwork:h3stream] 0x10f2924d8 ID=4 Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> received response, status 200 content U
+2026-10-25 01:46:55.928 Df App[19233:dfab4c] [com.apple.CFNetwork:Default] Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> response ended
+2026-10-25 01:46:55.928 Df App[19233:dfab4c] [com.apple.network:connection] [C7] event: client:connection_idle @29.723s
+2026-10-25 01:46:55.928 Df App[19233:dfab4c] [com.apple.CFNetwork:Default] Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> done using Connection 7
+2026-10-25 01:46:55.928 Df App[19233:dfab4c] [com.apple.CFNetwork:Summary] Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> summary for task success {transaction_duration_ms=98, response_status=200, connection=7, reused=1, reused_after_ms=26663, request_start_ms=1, request_duration_ms=1, response_start_ms=97, response_duration_ms=1, request_bytes=347, request_throughput_kbps=2060, response_bytes=1249, response_throughput_kbps=9034, cache_hit=true}
+2026-10-25 01:46:55.929 Df App[19233:dfab4c] [com.apple.CFNetwork:Default] Task <9A766E15-58FA-4135-BF70-7E02EE83F0F9>.<16> finished successfully

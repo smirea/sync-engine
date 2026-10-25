@@ -1,0 +1,6 @@
+when	what	why	evidence	result
+2026-10-25T04:25:50Z	baseline commit	harness before treatment	.audit/bench-pull-baseline.txt	dff293b
+2026-10-25T04:51:26Z	laws proven	six new laws: compact_rows compact_head converge_compacted batch_order batch_complete batch_acked; paging left to vectors+tests per brief	bend PROOF.bend ALL PROOFS CHECK	Asc made Bool so its hypothesis is copyable; batch_order via insert commutation, completeness via 2-fact induction
+2026-10-25T04:57:31Z	bench after	_changes 25000->5000, _log 45000->0, cursor-5000 delta 858KB->92KB page	.audit/bench-pull-after.txt	in-memory sqlite so ms are small; sizes carry the claim
+2026-10-25T05:03:00Z	PR opened	https://github.com/smirea/sync-engine/pull/15 after rebase onto PR 14	bun run test 168 pass, test:web 4 pass, spec ALL PROOFS CHECK	pr-ship loop next
+2026-10-25T05:13:06Z	PR green	head ee23028; Codex P2 fixed (touched set across failed page), web hook timeout fixed (pre-existing on master 4307474)	pr-ship exit 0	not merged per brief

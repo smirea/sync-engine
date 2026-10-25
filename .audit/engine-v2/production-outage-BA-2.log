@@ -1,0 +1,6 @@
+watching settings on the writer (1:9bd4b618); make the write in the app now
+writer settings is now 1:60116497 (outbox=1)
+change queued offline, outbox=1; start the server now (serve.sh in the background)
+server /status answered
+writer outbox empty (push acked) after the reader matched
+RESULT outage settings: reader reached 1:60116497 6913 ms after the server came back

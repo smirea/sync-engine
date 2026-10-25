@@ -1,0 +1,2 @@
+watching api_tokens on the writer (1 rows); delete a row in the app now
+RESULT deletion api_tokens 20c194cc-6691-4456-84b1-fe0744a9ad42: reader dropped it 276 ms after the writer did; reader path: delta
