@@ -151,8 +151,9 @@ final class ClientTests: XCTestCase {
         XCTAssertLessThan(resumed.duration(to: StubServer.received.last!.at), .milliseconds(500))
         StubServer.reply(StubServer.json(200, Fixture.response(head: 1, acked: 0)))
         try await Task.sleep(for: .milliseconds(2500))
-        XCTAssertEqual(StubServer.received.count, 5)
-        XCTAssertLessThan(resumed.duration(to: StubServer.received.last!.at), .seconds(3))
+        // The socket loop's second attempt lands at the same 2 s and may add a pull of its own.
+        XCTAssertGreaterThanOrEqual(StubServer.received.count, 5)
+        XCTAssertLessThan(resumed.duration(to: StubServer.received[4].at), .seconds(3))
         XCTAssertEqual(client.status, .idle)
     }
 

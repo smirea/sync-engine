@@ -19,7 +19,10 @@ export type SyncClientOptions = {
 	WebSocket?: typeof WebSocket;
 	/** Milliseconds between periodic syncs while started. */
 	interval?: number;
-	/** Longest wait in milliseconds before a failed sync is retried or a dropped socket is reopened. */
+	/**
+	 * Longest wait in milliseconds before a failed sync is retried or a dropped socket is reopened. Also the tick at
+	 * which an open socket is pinged and a closed one pulls over HTTP, so an outage costs at most this per side.
+	 */
 	maxBackoff?: number;
 };
 
@@ -57,7 +60,6 @@ type Live = {
 	reconnect: ReturnType<typeof setTimeout> | null;
 };
 
-const PING_MS = 30_000;
 const FIRST_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 15_000;
 const DIRTY_MS = 100;
@@ -209,6 +211,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		state.reconnect = setTimeout(() => {
 			state.reconnect = null;
 			connect(state);
+			pull();
 		}, state.backoff);
 		state.backoff = Math.min(state.backoff * 2, maxBackoff);
 	}
@@ -232,8 +235,14 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		if (globalThis.document?.visibilityState !== 'hidden') wake();
 	};
 
-	function ping(state: Live) {
-		if (state.socket?.readyState !== Socket.OPEN) return;
+	// HTTP often answers while the socket still fails (iOS after an outage), so a reconnect attempt and a tick without
+	// an open socket pull, unless a retry is already due within maxBackoff.
+	function pull() {
+		if (!retry) background();
+	}
+
+	function tick(state: Live) {
+		if (state.socket?.readyState !== Socket.OPEN) return pull();
 		// No message since the last ping: the connection is dead even if the socket never reported a close.
 		if (!state.heard) return drop(state);
 		state.heard = false;
@@ -258,7 +267,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			};
 			live = state;
 			state.timers.push(
-				setInterval(() => ping(state), PING_MS),
+				setInterval(() => tick(state), maxBackoff),
 				setInterval(background, options.interval ?? 60_000),
 			);
 			globalThis.addEventListener?.('online', wake);

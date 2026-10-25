@@ -302,6 +302,10 @@ public final class SyncClient {
                 guard !Task.isCancelled else { return }
                 attempt = connected ? 1 : attempt + 1
                 try? await Task.sleep(for: .seconds(min(15, 1 << min(attempt, 6))))
+                guard !Task.isCancelled, let self else { return }
+                // HTTP often answers while the socket still fails after an outage (-1009), so an attempt pulls
+                // unless a retry or a write is about to.
+                if due == nil { schedule(after: .zero) }
             }
         }
     }
@@ -324,7 +328,7 @@ public final class SyncClient {
         var connected = false
         let pinger = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(15))
                 try? await socket.ping()
             }
         }
