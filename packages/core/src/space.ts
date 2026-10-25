@@ -123,7 +123,6 @@ export function createSpace(driver: SqlDriver, schema: Schema, options: SpaceOpt
 		return row ? [live(table, row)] : [];
 	};
 
-	/** Live rows in schema table order then id, starting after `after`; `limit` null means every row. */
 	function snapshot(after: After | null, limit: number | null): { rows: PulledRow[]; next: After | null } {
 		const rows: PulledRow[] = [];
 		const found = after ? schema.tables.findIndex(table => table.name === after.table) : -1;

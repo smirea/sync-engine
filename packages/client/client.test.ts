@@ -19,6 +19,7 @@ const schema = defineSchema({
 			title: text('title').notNull(),
 			done: integer('done').notNull().default(0),
 		}),
+		tags: sqliteTable('tags', { id: text('id').primaryKey(), label: text('label').notNull() }),
 	},
 });
 
@@ -88,7 +89,7 @@ describe('createSyncClient over HTTP', () => {
 		const changed = a.nextChange();
 		a.client.markDirty();
 		a.client.markDirty();
-		expect(await changed).toEqual(new Set(['notes']));
+		expect(await changed).toEqual(new Set(['notes', 'tags']));
 		expect(a.client.status()).toEqual({
 			live: false,
 			syncing: false,
@@ -111,7 +112,7 @@ describe('createSyncClient over HTTP', () => {
 		await a.client.sync();
 		await b.client.sync();
 		const expected = [{ id: 'n1', title: 'one', done: 1 }];
-		expect(dump()).toEqual({ notes: expected });
+		expect(dump()).toEqual({ notes: expected, tags: [] });
 		expect(a.rows()).toEqual(expected);
 		expect(b.rows()).toEqual(expected);
 	});
@@ -144,7 +145,7 @@ describe('createSyncClient over HTTP', () => {
 			next: null,
 			head: 5,
 		});
-		expect(await changed).toEqual(new Set(['notes']));
+		expect(await changed).toEqual(new Set(['notes', 'tags']));
 		expect(c.rows().map(r => r.id)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5']);
 		expect(c.client.status()).toEqual({
 			live: false,
@@ -154,6 +155,32 @@ describe('createSyncClient over HTTP', () => {
 			lastError: null,
 			snapshot: null,
 		});
+	});
+
+	test('a page that fails after a committed page still reports the committed tables', async () => {
+		const { endpoint } = server({ pageSize: 2 });
+		const a = peer(endpoint);
+		insert(a.db, 'n1', 'one');
+		insert(a.db, 'n2', 'two');
+		a.db.exec("INSERT INTO tags (id, label) VALUES ('t1', 'red'), ('t2', 'blue')");
+		await a.client.sync();
+
+		let calls = 0;
+		const flaky = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			calls += 1;
+			if (calls === 2) throw new Error('page 2 lost');
+			return fetch(input, init);
+		}) as typeof fetch;
+		const c = peer(endpoint, { fetch: flaky });
+		await expect(c.client.sync()).rejects.toThrow('page 2 lost');
+		expect(c.rows().map(r => r.id)).toEqual(['n1', 'n2']);
+		expect(c.client.status().snapshot).toEqual({ rows: 2 });
+
+		const changed = c.nextChange();
+		await c.client.sync();
+		expect(await changed).toEqual(new Set(['notes', 'tags']));
+		expect(c.db.exec('SELECT id FROM tags ORDER BY id')).toEqual([{ id: 't1' }, { id: 't2' }]);
+		expect(c.client.status().snapshot).toBeNull();
 	});
 
 	test('a live nudge makes a started client pull within 2 s', async () => {
@@ -167,7 +194,7 @@ describe('createSyncClient over HTTP', () => {
 		insert(a.db, 'n1', 'live');
 		const started = performance.now();
 		await a.client.sync();
-		expect(await changed).toEqual(new Set(['notes']));
+		expect(await changed).toEqual(new Set(['notes', 'tags']));
 		expect(performance.now() - started).toBeLessThan(2000);
 		expect(b.rows()).toEqual([{ id: 'n1', title: 'live', done: 0 }]);
 	});
@@ -255,7 +282,7 @@ describe('createSyncClient over HTTP', () => {
 		const changed = b.nextChange();
 		insert(a.db, 'n1', 'after restart');
 		await a.client.sync();
-		expect(await changed).toEqual(new Set(['notes']));
+		expect(await changed).toEqual(new Set(['notes', 'tags']));
 		expect(b.rows()).toEqual([{ id: 'n1', title: 'after restart', done: 0 }]);
 	});
 
@@ -277,7 +304,7 @@ describe('createSyncClient over HTTP', () => {
 		const restarted = performance.now();
 		await until(() => a.client.status().pending === 0, 3000);
 		expect(performance.now() - restarted).toBeLessThan(3000);
-		expect(second.dump()).toEqual({ notes: [{ id: 'n1', title: 'queued', done: 0 }] });
+		expect(second.dump()).toEqual({ notes: [{ id: 'n1', title: 'queued', done: 0 }], tags: [] });
 		expect(a.client.status().lastError).toBeNull();
 	}, 10_000);
 });

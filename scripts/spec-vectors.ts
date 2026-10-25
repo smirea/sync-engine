@@ -192,12 +192,10 @@ function scenario(seed: number): Scenario {
 	const local: Client = { $: 'Client', local: mid.rows, cursor: mid.head };
 	const after = model.applyPull(local, model.pull(current, mid.head));
 
-	// compaction: everything the first COMPACT_AT writes stamped is old enough to drop
 	const horizon = states[COMPACT_AT - 1]!.head;
 	const compacted = model.compact(current, horizon);
 	const compactionPulls = [horizon - 1, horizon, current.head].filter(cursor => cursor >= 0);
 
-	// batch: a fresh client edits a copy of the final rows, then its outbox goes up as one batch in first-seen order
 	const batchClient = CLIENTS;
 	let batchLocal = current.rows;
 	const ops: LocalOp[] = [];
@@ -234,7 +232,6 @@ function scenario(seed: number): Scenario {
 	const batchWrites = model.collect(batchClient, batchLocal, list(entries));
 	const batched = model.applyBatch(current, batchWrites);
 
-	// paging: pages of PAGE_SIZE while the writes after PAGE_FROM land, then a delta from the first page's head
 	const pages: PageVector[] = [];
 	let pageLocal: KMap<NMap> = { $: 'KNil' };
 	let at = PAGE_FROM;

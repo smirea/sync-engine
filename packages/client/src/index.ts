@@ -77,6 +77,8 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	let retryBackoff = firstBackoff;
 	let live: Live | null = null;
 	let snapshotRows = 0;
+	// Tables changed by committed pages of a run that then failed; the next run that succeeds reports them.
+	const touched = new Set<string>();
 
 	const ready = () => {
 		if (!migrated) throw new Error('call migrate() before using the sync client');
@@ -105,10 +107,8 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		return (await reply.json()) as SyncResponse;
 	}
 
-	/** One sync: the outbox goes with the first request, then every remaining snapshot page with no writes. */
-	async function once(): Promise<{ response: SyncResponse; touched: Set<string> }> {
+	async function once(): Promise<SyncResponse> {
 		try {
-			const touched = new Set<string>();
 			let batch = core.collect();
 			let response: SyncResponse;
 			do {
@@ -118,7 +118,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 				snapshotRows = core.snapshot() ? snapshotRows + response.rows.length : 0;
 			} while (core.snapshot());
 			lastError = null;
-			return { response, touched };
+			return response;
 		} catch (error) {
 			lastError = error instanceof Error ? error.message : String(error);
 			throw error;
@@ -133,11 +133,15 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			done.resolve();
 		};
 		try {
-			const { response, touched } = await once();
+			const response = await once();
 			retryBackoff = firstBackoff;
 			// Settle before notifying so a listener reads the status of a finished sync.
 			settle();
-			if (touched.size) for (const listener of listeners) listener(touched);
+			if (touched.size) {
+				const tables = new Set(touched);
+				touched.clear();
+				for (const listener of listeners) listener(tables);
+			}
 			return response;
 		} catch (error) {
 			if (live && !retry) {

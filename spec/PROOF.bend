@@ -318,7 +318,6 @@ def conv.go(changes: S.KMap<Nat>, +rows: S.KMap<S.NMap<Nat>>, +local: S.KMap<S.N
     case S.KCon{+key, +stamp, +rest}:
       conv.step(rest, rows, local, cursor, k, key, stamp, Nat.is_gt(stamp, cursor), {==}, S.Key.eq(key, k), {==}, inv, local2 => inv2 => conv.go(rest, rows, local2, cursor, k, inv2))
 
-# below the horizon (or at cursor 0) the pull is the rows themselves; above it the delta argument applies
 def conv.pick(b: Bool, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +local: S.KMap<S.NMap<Nat>>, +cursor: Nat, +k: S.Key, inv: {True{} == Nat.is_le(S.KMap.get(Nat, changes, k, 0n), cursor) : Bool} -> {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}) -> {S.KMap.lookup(S.NMap<Nat>, S.Client.local(S.applyPull(S.Client{local, cursor}, S.pull.pick(b, rows, head, changes, cursor))), k) == S.KMap.lookup(S.NMap<Nat>, rows, k) : Maybe<&2, S.NMap<Nat>>}:
   match b:
     case True{}:
@@ -522,7 +521,6 @@ def Nat.gt_not_le(a: Nat, b: Nat, e: {True{} == Nat.is_gt(a, b) : Bool}) -> {Fal
     case 1n+p 1n+q:
       Nat.gt_not_le(p, q, e)
 
-# insertion takes the head when the new seq is smaller, else skips it
 def ins_lt(+a: S.Write, +x: S.Write, +rest: List<&2, S.Write>, +e: {True{} == Nat.is_lt(S.Write.seq(a), S.Write.seq(x)) : Bool}) -> {a <> (x <> rest) == S.insert(a, x <> rest) : List<&2, S.Write>}:
   %e : {a <> (x <> rest) == S.KMap.if(List<&2, S.Write>, a <> (x <> rest), x <> S.insert(a, rest), _) : List<&2, S.Write>}
   {==}
@@ -531,7 +529,6 @@ def ins_ge(+a: S.Write, +x: S.Write, +rest: List<&2, S.Write>, +e: {False{} == N
   %e : {x <> S.insert(a, rest) == S.KMap.if(List<&2, S.Write>, a <> (x <> rest), x <> S.insert(a, rest), _) : List<&2, S.Write>}
   {==}
 
-# two writes with different seqs land in seq order whichever is inserted first
 def ic.nil(g: Bool, +a: S.Write, +b: S.Write, +e: {g == Nat.is_lt(S.Write.seq(a), S.Write.seq(b)) : Bool}, +ne: {False{} == Nat.is_eq(S.Write.seq(a), S.Write.seq(b)) : Bool}) -> {S.insert(a, S.insert(b, Nil{})) == S.insert(b, S.insert(a, Nil{})) : List<&2, S.Write>}:
   match g:
     case True{}:
@@ -603,7 +600,6 @@ def Laws.batch_order(s, xs, a, b, ys, ne):
   %sort_swap(xs, a, b, ys, ne) : {S.applyAll(S.sortBySeq(List.append(&2, S.Write, xs, a <> (b <> ys))), s) == S.applyAll(_, s) : S.State}
   {==}
 
-# an ascending batch is its own sort
 def sort_asc.head(rest: List<&2, S.Write>, +client: Nat, +seq: Nat, +op: S.Op, +table: Nat, +id: Nat, +c: Nat, +asc: {True{} == S.Asc(rest, seq, c) : Bool}) -> {S.Write{client, seq, op, table, id} <> rest == S.insert(S.Write{client, seq, op, table, id}, rest) : List<&2, S.Write>}:
   match rest:
     case Nil{}:
@@ -619,12 +615,10 @@ def sort_asc(ws: List<&2, S.Write>, +n: Nat, +c: Nat, +asc: {True{} == S.Asc(ws,
       %sort_asc(rest, seq, c, Bool.and_r(Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)), S.Asc(rest, seq, c), asc)) : {S.Write{client, seq, op, table, id} <> rest == S.insert(S.Write{client, seq, op, table, id}, _) : List<&2, S.Write>}
       sort_asc.head(rest, client, seq, op, table, id, c, Bool.and_r(Bool.and(Nat.is_eq(client, c), Nat.is_gt(seq, n)), S.Asc(rest, seq, c), asc))
 
-# a write above the client's entry passes the replay guard
 def apply_fresh(+rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat, +client: Nat, +seq: Nat, +op: S.Op, +table: Nat, +id: Nat, +gt: {True{} == Nat.is_gt(seq, S.NMap.get(Nat, clients, client, 0n)) : Bool}) -> {S.apply.force(S.State{rows, head, changes, clients, horizon}, S.Write{client, seq, op, table, id}) == S.apply(S.State{rows, head, changes, clients, horizon}, S.Write{client, seq, op, table, id}) : S.State}:
   %Nat.gt_not_le(seq, S.NMap.get(Nat, clients, client, 0n), gt) : {S.apply.go(False{}, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq) == S.apply.go(_, op, S.RowKey{table, id}, rows, head, changes, clients, horizon, client, seq) : S.State}
   {==}
 
-# applying a write leaves the client table at the entry the guard set
 def force_clients.patch(cur: Maybe<&2, S.NMap<Nat>>, +cols: S.NMap<Nat>, +key: S.Key, +rows: S.KMap<S.NMap<Nat>>, +head: Nat, +changes: S.KMap<Nat>, +clients: S.NMap<Nat>, +horizon: Nat) -> {clients == S.State.clients(S.apply.patch(cur, cols, key, rows, head, changes, clients, horizon)) : S.NMap<Nat>}:
   match cur:
     case None{}:

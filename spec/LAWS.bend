@@ -33,8 +33,6 @@ law inv_preserved:
   for h: {True{} == Nat.is_le(S.KMap.get(Nat, S.State.changes(S.apply(s, w)), k, 0n), cursor) : Bool}
   {S.KMap.lookup(S.NMap<Nat>, local, k) == S.KMap.lookup(S.NMap<Nat>, S.State.rows(S.apply(s, w)), k) : Maybe<&2, S.NMap<Nat>>}
 
-# Compaction changes what a pull below the horizon looks like, never the
-# data: rows and head stay.
 law compact_rows:
   for +s: S.State
   for +h: Nat

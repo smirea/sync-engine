@@ -8,7 +8,6 @@ def Key.eq(+a: Key, +b: Key) -> Bool:
     case RowKey{at, ai} RowKey{bt, bi}:
       Bool.and(Nat.is_eq(at, bt), Nat.is_eq(ai, bi))
 
-# (table, id) order: the order of a snapshot and its pages
 def Key.lt(+a: Key, +b: Key) -> Bool:
   match a b:
     case RowKey{at, ai} RowKey{bt, bi}:
@@ -178,13 +177,11 @@ def apply(s: State, w: Write) -> State:
     case State{+rows, +head, changes, +clients, horizon} Write{+client, +seq, op, table, id}:
       apply.go(Nat.is_le(seq, NMap.get(Nat, clients, client, 0n)), op, RowKey{table, id}, rows, head, changes, clients, horizon, client, seq)
 
-# the same write with the replay guard off: what apply does to a write it has not seen
 def apply.force(s: State, w: Write) -> State:
   match s w:
     case State{rows, head, changes, clients, horizon} Write{client, seq, op, table, id}:
       apply.go(False{}, op, RowKey{table, id}, rows, head, changes, clients, horizon, client, seq)
 
-# a batch: sorted by seq, then applied one by one
 def insert(+w: Write, ws: List<&2, Write>) -> List<&2, Write>:
   match ws:
     case Nil{}:
@@ -418,7 +415,6 @@ def project.put(hit: Maybe<&2, Nat>, +c: Nat, tail: NMap<Nat>) -> NMap<Nat>:
     case Some{v}:
       NCon{c, v, tail}
 
-# the recorded columns with their current values; a column the sparse row lacks is left out
 def project(cols: List<&2, Nat>, +row: NMap<Nat>) -> NMap<Nat>:
   match cols:
     case Nil{}:
@@ -426,7 +422,6 @@ def project(cols: List<&2, Nat>, +row: NMap<Nat>) -> NMap<Nat>:
     case Con{+c, rest}:
       project.put(NMap.lookup(Nat, row, c), c, project(rest, row))
 
-# last op delete: a delete; else a missing row drops the group; inserted: a put; else a patch of the recorded columns
 def collect.write(+client: Nat, table: Nat, id: Nat, seq: Nat, last: EOp, hit: Maybe<&2, NMap<Nat>>, inserted: Bool, cols: List<&2, Nat>) -> Maybe<&2, Write>:
   match last:
     case Deleted{}:

@@ -97,7 +97,6 @@ const toResponse = (pull: PullVector): SyncResponse => ({
 });
 const sorted = (rows: PulledRow[]) =>
 	rows.toSorted((a, b) => a.table.localeCompare(b.table) || a.id.localeCompare(b.id));
-/** A collected write as the model sees it: the sparse columns, no id and no nulls. */
 const fromCollected = (w: Write): WriteVector =>
 	w.op === 'delete'
 		? { seq: w.seq, table: w.table, id: w.id, op: w.op }

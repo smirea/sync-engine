@@ -24,7 +24,6 @@ const notes = sqliteTable('notes', {
 });
 const schema = defineSchema({ tables: { notes }, values: { notes: { tags: z.array(z.string()) } } });
 
-/** One protocol 2 sync the way the client loop runs it: the outbox on the first request, then every snapshot page. */
 function syncPages(server: Space, client: Client, batch = client.collect()): SyncResponse {
 	let response: SyncResponse;
 	do {
