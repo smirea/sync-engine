@@ -199,6 +199,13 @@ jobs:
         with:
           path: .build
           key: ${{ runner.os }}-${{ runner.arch }}-swift-${{ hashFiles('Package.swift') }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: needs.changes.outputs.swift == 'true'
+        with:
+          bun-version-file: .bun-version
+      - name: Install dependencies for the test server
+        if: needs.changes.outputs.swift == 'true'
+        run: bun install --frozen-lockfile
       - name: Test
         if: needs.changes.outputs.swift == 'true'
         run: swift test

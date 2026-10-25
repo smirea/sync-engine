@@ -59,8 +59,8 @@ enum Fixture {
         PulledRow(table: table, id: id, deleted: 1, values: nil)
     }
 
-    static func response(head: Int, acked: Int = 0, snapshot: Bool = false, rows: [PulledRow] = [], rejected: [RejectedWrite] = []) -> SyncResponse {
-        SyncResponse(head: head, acked: acked, rejected: rejected, snapshot: snapshot, rows: rows)
+    static func response(head: Int, acked: Int = 0, snapshot: Bool = false, rows: [PulledRow] = [], rejected: [RejectedWrite] = [], next: After? = nil) -> SyncResponse {
+        SyncResponse(head: head, acked: acked, rejected: rejected, snapshot: snapshot, rows: rows, next: next)
     }
 }
 
@@ -128,17 +128,7 @@ final class StubServer: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        var body = Data()
-        if let stream = request.httpBodyStream {
-            stream.open()
-            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 4096)
-            defer { buffer.deallocate(); stream.close() }
-            while stream.hasBytesAvailable {
-                let count = stream.read(buffer, maxLength: 4096)
-                guard count > 0 else { break }
-                body.append(buffer, count: count)
-            }
-        }
+        let body = request.streamedBody
         let received = Received(url: request.url!, authorization: request.value(forHTTPHeaderField: "Authorization"), body: body)
         let (reply, latency) = Self.state.withLock { state in
             state.received.append(received)
@@ -153,6 +143,113 @@ final class StubServer: URLProtocol {
             client?.urlProtocolDidFinishLoading(self)
         case let .failure(code):
             client?.urlProtocol(self, didFailWithError: URLError(code))
+        }
+    }
+
+    override func stopLoading() {}
+}
+
+extension URLRequest {
+    /// URLSession hands a protocol the body as a stream, never as `httpBody`.
+    var streamedBody: Data {
+        guard let stream = httpBodyStream else { return httpBody ?? Data() }
+        var body = Data()
+        stream.open()
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 4096)
+        defer { buffer.deallocate(); stream.close() }
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: 4096)
+            guard count > 0 else { break }
+            body.append(buffer, count: count)
+        }
+        return body
+    }
+}
+
+/// The real server from `Tests/server.ts` on a free port, with an in-memory space and the token `secret`.
+final class BunServer {
+    let url: URL
+    private let process = Process()
+    private let input = Pipe()
+
+    init(space: [String: Int] = [:]) throws {
+        let script = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "server.ts")
+        let output = Pipe()
+        process.executableURL = URL(filePath: "/usr/bin/env")
+        process.arguments = ["bun", script.path, String(decoding: try JSONEncoder().encode(space), as: UTF8.self)]
+        process.standardInput = input
+        process.standardOutput = output
+        try process.run()
+        var line = Data()
+        while !line.contains(UInt8(ascii: "\n")) {
+            let chunk = output.fileHandleForReading.availableData
+            guard !chunk.isEmpty else { throw URLError(.cannotConnectToHost) }
+            line.append(chunk)
+        }
+        url = URL(string: "http://127.0.0.1:\(String(decoding: line, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))/")!
+    }
+
+    deinit {
+        process.terminate()
+    }
+
+    /// A sync from another device, straight to the server.
+    static func post(_ body: SyncRequest, to url: URL) async throws -> SyncResponse {
+        var request = URLRequest(url: url.appending(path: "sync"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer secret", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(SyncResponse.self, from: data)
+    }
+}
+
+/// Forwards every request to the real server, recording its body and first awaiting `before` with its index, so a
+/// test can write between two pages or fail one with a thrown `URLError`.
+final class Relay: URLProtocol {
+    typealias Before = @Sendable (Int) async throws -> Void
+
+    static let state = Mutex<(bodies: [Data], before: Before)>(([], { _ in }))
+
+    static func reset(before: @escaping Before = { _ in }) {
+        state.withLock { $0 = ([], before) }
+    }
+
+    static var requests: [SyncRequest] {
+        get throws { try state.withLock { $0.bodies }.map { try JSONDecoder().decode(SyncRequest.self, from: $0) } }
+    }
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [Relay.self]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.scheme?.hasPrefix("http") == true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let body = request.streamedBody
+        let forwarded = { var forwarded = request; forwarded.httpBody = body; return forwarded }()
+        let (index, before) = Self.state.withLock { state in
+            state.bodies.append(body)
+            return (state.bodies.count - 1, state.before)
+        }
+        // URLProtocol is not Sendable, but URL loading takes its client callbacks from any thread.
+        nonisolated(unsafe) let relay = self
+        Task {
+            do {
+                try await before(index)
+                let (data, response) = try await URLSession.shared.data(for: forwarded)
+                relay.client?.urlProtocol(relay, didReceive: response, cacheStoragePolicy: .notAllowed)
+                relay.client?.urlProtocol(relay, didLoad: data)
+                relay.client?.urlProtocolDidFinishLoading(relay)
+            } catch {
+                relay.client?.urlProtocol(relay, didFailWithError: error)
+            }
         }
     }
 

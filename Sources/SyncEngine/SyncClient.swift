@@ -16,6 +16,9 @@ public final class SyncClient {
     public private(set) var head = 0
     /// What the server refused, newest first, at most 20. A rejected write is dropped, so this is the only trace of it.
     public private(set) var rejected: [SyncRejection] = []
+    /// Rows this run has applied of a paged snapshot in progress, else nil. A snapshot interrupted by a restart
+    /// reads 0 until its next page lands.
+    public private(set) var snapshotRows: Int?
 
     @ObservationIgnored private let database: DatabasePool
     @ObservationIgnored private let store: SyncStore
@@ -60,12 +63,13 @@ public final class SyncClient {
 
     public func migrate() throws {
         let store = store
-        let (client, cursor) = try database.write { db in
+        let (client, cursor, paging) = try database.write { db in
             try store.migrate(db)
-            return (try store.meta("client", db) ?? "", try store.cursor(db))
+            return (try store.meta("client", db) ?? "", try store.cursor(db), try store.snapshot(db) != nil)
         }
         clientID = client
         head = cursor
+        snapshotRows = paging ? 0 : nil
         guard outbox == nil else { return }
         outbox = ValueObservation
             .tracking { db in
@@ -132,45 +136,68 @@ public final class SyncClient {
         }
         status = .syncing
         do {
-            let (store, clientID) = (store, clientID)
-            let (cursor, collected) = try await database.read { db in (try store.cursor(db), try store.collect(db)) }
-            var request = URLRequest(url: endpoint.appending(path: "sync"))
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.httpBody = try JSONEncoder().encode(SyncRequest(protocol: 1, client: clientID, cursor: cursor, writes: collected.writes))
-            let (data, response) = try await session.data(for: request)
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            switch code {
-            case 200:
-                let decoded = try JSONDecoder().decode(SyncResponse.self, from: data)
-                if !collected.writes.isEmpty, decoded.acked > collected.sent {
-                    try await adoptNewClientID(acked: decoded.acked, sent: collected.sent)
+            let store = store
+            var collected = try await database.read { try store.collect($0) }
+            while true {
+                let (cursor, progress) = try await database.read { db in (try store.cursor(db), try store.snapshot(db)) }
+                let request = SyncRequest(protocol: 2, client: clientID, cursor: cursor, writes: collected.writes, after: progress?.after)
+                let response = try await post(request, token: token)
+                if !collected.writes.isEmpty, response.acked > collected.sent {
+                    try await adoptNewClientID(acked: response.acked, sent: collected.sent)
                     return
                 }
-                let acked = decoded.acked >= collected.sent ? max(decoded.acked, collected.highest) : decoded.acked
-                try await database.write { db in try store.apply(decoded, acked: acked, db) }
-                head = decoded.head
-                lastSyncAt = .now
-                let refused = decoded.rejected.map { SyncRejection(table: $0.table, id: $0.id, reason: $0.reason) }
+                let acked = response.acked >= collected.sent ? max(response.acked, collected.highest) : response.acked
+                let (applied, paging) = try await database.write { db in
+                    try store.apply(response, acked: acked, db)
+                    return (try store.cursor(db), try store.snapshot(db) != nil)
+                }
+                let refused = response.rejected.map { SyncRejection(table: $0.table, id: $0.id, reason: $0.reason) }
                 if !refused.isEmpty { rejected = Array((refused + rejected).prefix(20)) }
-                failures = 0
-                status = .idle
-                if liveHead > head { schedule(after: .zero) }
-            case 401:
-                unauthorized()
-            default:
-                fail("HTTP \(code)")
+                if paging {
+                    snapshotRows = (snapshotRows ?? 0) + response.rows.count
+                    collected = Collected(writes: [], highest: 0)
+                    continue
+                }
+                snapshotRows = nil
+                head = applied
+                break
             }
+            lastSyncAt = .now
+            failures = 0
+            status = .idle
+            if liveHead > head { schedule(after: .zero) }
         } catch is URLError {
             status = .offline
             retryLater()
+        } catch Refusal.unauthorized {
+            unauthorized()
+        } catch let Refusal.status(code) {
+            fail("HTTP \(code)")
         } catch let error as SyncSchemaError {
             log.fault("Sync stopped on a schema misuse: \(error.description)")
             status = .failed(error.description)
             assertionFailure(error.description)
         } catch {
             fail(String(describing: error))
+        }
+    }
+
+    private enum Refusal: Error {
+        case unauthorized
+        case status(Int)
+    }
+
+    private func post(_ body: SyncRequest, token: String) async throws -> SyncResponse {
+        var request = URLRequest(url: endpoint.appending(path: "sync"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await session.data(for: request)
+        switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
+        case 200: return try JSONDecoder().decode(SyncResponse.self, from: data)
+        case 401: throw Refusal.unauthorized
+        case let code: throw Refusal.status(code)
         }
     }
 

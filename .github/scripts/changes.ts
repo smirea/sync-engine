@@ -14,7 +14,9 @@ const paths = (full ? [] : (await $`git diff --name-only -z ${comparison}`.text(
 const common = full || paths.some(name => name.startsWith('.github/'));
 const isSwift = (name: string) => name === 'Package.swift' || name.startsWith('Sources/') || name.startsWith('Tests/');
 const bun = kind !== 'empty' && (common || paths.some(name => !isSwift(name)));
-const swift = common || paths.some(isSwift);
+// The Swift tests run against the Bun server in Tests/server.ts, so a server change reruns them.
+const serves = (name: string) => /^packages\/(core|bun-sqlite|bun-server)\/src\//.test(name);
+const swift = common || paths.some(name => isSwift(name) || serves(name));
 
 const spec = common || paths.some(name => name.startsWith('spec/') || name === 'scripts/spec.ts');
 const web =

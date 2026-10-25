@@ -25,7 +25,7 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(received[0].authorization, "Bearer secret")
         let clientID = try pool.strings("SELECT value FROM _meta WHERE key = 'client'")[0]
         let request = try JSONDecoder().decode(SyncRequest.self, from: received[0].body)
-        XCTAssertEqual(request.protocol, 1)
+        XCTAssertEqual(request.protocol, 2)
         XCTAssertEqual(request.client, clientID)
         XCTAssertEqual(request.cursor, 0)
         XCTAssertEqual(request.writes, [SyncWrite(seq: 1, table: "notes", id: "n1", op: .put, values: ["title": .string("Hi"), "body": .null, "stars": .integer(2)])])

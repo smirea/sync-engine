@@ -40,11 +40,18 @@ struct SyncWrite: Codable, Equatable, Sendable {
     let values: [String: JSONValue]?
 }
 
+/// A snapshot row's key: the `next` of one page and the `after` of the request for the following one.
+struct After: Codable, Equatable, Sendable {
+    let table: String
+    let id: String
+}
+
 struct SyncRequest: Codable, Sendable {
     let `protocol`: Int
     let client: String
     let cursor: Int
     let writes: [SyncWrite]
+    let after: After?
 }
 
 struct RejectedWrite: Codable, Equatable, Sendable {
@@ -67,6 +74,7 @@ struct SyncResponse: Codable, Equatable, Sendable {
     let rejected: [RejectedWrite]
     let snapshot: Bool
     let rows: [PulledRow]
+    let next: After?
 }
 
 struct LiveMessage: Codable, Sendable {
