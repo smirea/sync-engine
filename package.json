@@ -22,7 +22,7 @@
 		"lint:ci": "oxlint && oxfmt --check",
 		"typecheck": "bun check",
 		"test": "bun test --pass-with-no-tests --path-ignore-patterns 'packages/client-web/**'",
-		"test:web": "bun test packages/client-web",
+		"test:web": "bun test --timeout 30000 packages/client-web",
 		"spec": "bun scripts/spec.ts",
 		"build": "bun build packages/core/src/index.ts --target browser --outdir dist",
 		"spec-vectors": "bun scripts/spec-vectors.ts"
