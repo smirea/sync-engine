@@ -15,6 +15,12 @@ export type ServeOptions = ({ driver: SqlDriver; file?: never } | { file: string
 	hostname?: string;
 };
 
+const CORS = {
+	'access-control-allow-origin': '*',
+	'access-control-allow-methods': 'POST',
+	'access-control-allow-headers': 'authorization, content-type',
+};
+
 export function serve({ schema, authorize, port, hostname, ...storage }: ServeOptions) {
 	const space = createSpace(storage.driver ?? bunSqlite(storage.file!), schema);
 	space.migrate();
@@ -23,10 +29,11 @@ export function serve({ schema, authorize, port, hostname, ...storage }: ServeOp
 		hostname,
 		async fetch(request, server) {
 			const route = `${request.method} ${new URL(request.url).pathname}`;
+			if (route === 'OPTIONS /sync') return new Response(null, { status: 204, headers: CORS });
 			if (route !== 'POST /sync' && route !== 'GET /live') return new Response('not found', { status: 404 });
 			// withBearer may rebuild the request, which moves the body, so /sync reads the normalized copy from here on.
 			const normalized = withBearer(request);
-			if (!(await authorize(normalized))) return new Response('unauthorized', { status: 401 });
+			if (!(await authorize(normalized))) return new Response('unauthorized', { status: 401, headers: CORS });
 			if (route === 'GET /live') {
 				// Echo the subprotocol only when offered: a client that sent none, like the Swift one, fails on an echo.
 				const offered = request.headers
@@ -41,6 +48,7 @@ export function serve({ schema, authorize, port, hostname, ...storage }: ServeOp
 			const response = await handleSync(space, normalized);
 			const head = space.head();
 			if (head > before) server.publish('live', JSON.stringify({ head }));
+			for (const [header, value] of Object.entries(CORS)) response.headers.set(header, value);
 			return response;
 		},
 		websocket: {
