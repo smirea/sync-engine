@@ -308,3 +308,49 @@ describe('createSyncClient over HTTP', () => {
 		expect(a.client.status().lastError).toBeNull();
 	}, 10_000);
 });
+
+describe('live socket that died silently', () => {
+	// Sends vanish and inbound messages are withheld while `down`, and new sockets refuse to connect, while HTTP still
+	// answers: the shape of an outage whose socket never reported a close, and of iOS reconnects failing after it.
+	function deadSockets() {
+		let down = false;
+		class Dead extends WebSocket {
+			constructor(url: string | URL, protocols?: string | string[]) {
+				super(down ? 'ws://127.0.0.1:1/live' : url, protocols);
+			}
+			override send(data: string) {
+				if (!down) super.send(data);
+			}
+			override addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+				const gated =
+					type === 'message' && typeof listener === 'function'
+						? (event: Event) => {
+								if (!down) listener(event);
+							}
+						: listener;
+				super.addEventListener(type, gated);
+			}
+		}
+		return { Socket: Dead as unknown as typeof WebSocket, cut: () => (down = true), restore: () => (down = false) };
+	}
+
+	test('a reader catches up within 4 ticks of maxBackoff while its socket stays dead', async () => {
+		const { endpoint } = server();
+		const sockets = deadSockets();
+		const a = peer(endpoint);
+		const b = peer(endpoint, { maxBackoff: 250, WebSocket: sockets.Socket });
+		b.client.start();
+		await until(() => b.client.status().live && !b.client.status().syncing);
+
+		sockets.cut();
+		insert(a.db, 'n1', 'while dead');
+		await a.client.sync();
+		const wrote = performance.now();
+		await until(() => b.rows().length === 1, 1500);
+		expect(performance.now() - wrote).toBeLessThan(1000);
+		expect(b.client.status().live).toBe(false);
+
+		sockets.restore();
+		await until(() => b.client.status().live);
+	}, 5000);
+});
