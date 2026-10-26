@@ -136,7 +136,11 @@ struct SyncStore: Sendable {
             let columns = known.columns.filter { values[$0] != nil }
             let names = (["id"] + columns).map { "\"\($0)\"" }.joined(separator: ", ")
             let marks = Array(repeating: "?", count: columns.count + 1).joined(separator: ", ")
-            let update = columns.isEmpty ? "NOTHING" : "UPDATE SET " + columns.map { "\"\($0)\" = excluded.\"\($0)\"" }.joined(separator: ", ")
+            let quoted = columns.map { "\"\($0)\"" }
+            let excluded = quoted.map { "excluded.\($0)" }
+            // An unchanged row is not rewritten, so the update hook and every GRDB observation of the table stay quiet.
+            let update = columns.isEmpty ? "NOTHING" : "UPDATE SET " + zip(quoted, excluded).map { "\($0) = \($1)" }.joined(separator: ", ")
+                + " WHERE (\(quoted.joined(separator: ", "))) IS NOT (\(excluded.joined(separator: ", ")))"
             let arguments: [DatabaseValueConvertible?] = [row.id] + columns.map { values[$0]!.databaseValue }
             try db.execute(
                 sql: "INSERT INTO \"\(row.table)\" (\(names)) VALUES (\(marks)) ON CONFLICT (id) DO \(update)",

@@ -382,6 +382,35 @@ describe('protocol amendments', () => {
 		expect(b.db.exec('SELECT * FROM drafts')).toEqual([{ id: 'd1', body: null }]);
 	});
 
+	test('the echo of a pushed write touches no table, a changed or deleted row does', () => {
+		const { server, a, b } = setup();
+		const sync = (peer: Peer) => {
+			const batch = peer.client.collect();
+			const response = server.sync({
+				protocol: 2,
+				client: peer.client.clientId(),
+				cursor: peer.client.cursor(),
+				writes: batch.writes,
+			});
+			return { rows: response.rows.map(r => r.id), touched: [...peer.client.apply(response, batch.acked)] };
+		};
+		insert(b, 'n1', 'from b');
+		b.sync();
+		a.pull();
+		insert(a, 'n2', 'from a');
+		expect(sync(a)).toEqual({ rows: ['n2'], touched: [] });
+		b.pull();
+		update(b, 'n2', 'title', 'b edit');
+		b.sync();
+		expect(sync(a)).toEqual({ rows: ['n2'], touched: ['notes'] });
+		a.db.exec("DELETE FROM notes WHERE id = 'n2'");
+		expect(sync(a)).toEqual({ rows: ['n2'], touched: [] });
+		b.db.exec("DELETE FROM notes WHERE id = 'n1'");
+		b.sync();
+		expect(sync(a)).toEqual({ rows: ['n1'], touched: ['notes'] });
+		expect(a.rows()).toEqual([]);
+	});
+
 	test('a copied database mints a new client id and re-sends its outbox', () => {
 		const { server, a, b } = setup();
 		for (let i = 1; i <= 5; i++) insert(a, `n${i}`, `note ${i}`);

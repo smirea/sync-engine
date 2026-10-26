@@ -41,6 +41,28 @@ final class PagingTests: XCTestCase {
         try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('cursor', 'after', 'snapshot_head') ORDER BY key")
     }
 
+    func testTheEchoOfAPushedWriteCommitsNothingLocally() async throws {
+        let server = try BunServer()
+        try await Self.other(server, [Self.put(1, "tags", "t1")])
+        let (client, pool) = try client(server)
+        await client.sync()
+        let commits = Mutex(0)
+        let cancellable = try DatabaseRegionObservation(tracking: Table("notes"))
+            .start(in: pool, onError: { XCTFail("\($0)") }, onChange: { _ in commits.withLock { $0 += 1 } })
+        defer { cancellable.cancel() }
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'MINE')")
+        Relay.reset()
+
+        await client.sync()
+
+        XCTAssertEqual(try Relay.requests.map(\.writes.count), [1])
+        XCTAssertEqual(try Relay.responses.flatMap(\.rows).map { "\($0.table)/\($0.id)" }, ["notes/n1"])
+        XCTAssertEqual(commits.withLock { $0 }, 1)
+        XCTAssertEqual(try rows(pool), ["notes/n1:MINE", "tags/t1:T1"])
+        XCTAssertEqual(try pool.outbox(), [])
+        XCTAssertEqual(client.head, 2)
+    }
+
     func testAPagedSnapshotOfSevenRowsConvergesInOneSync() async throws {
         let server = try BunServer(space: ["pageSize": 2])
         try await Self.other(server, Array(Self.seven.prefix(5)) + [Self.put(6, "tags", "t1")])
