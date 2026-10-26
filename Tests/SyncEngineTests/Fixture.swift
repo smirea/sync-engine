@@ -204,19 +204,23 @@ final class BunServer {
     }
 }
 
-/// Forwards every request to the real server, recording its body and first awaiting `before` with its index, so a
+/// Forwards every request to the real server, recording its body and the reply and first awaiting `before` with its index, so a
 /// test can write between two pages or fail one with a thrown `URLError`.
 final class Relay: URLProtocol {
     typealias Before = @Sendable (Int) async throws -> Void
 
-    static let state = Mutex<(bodies: [Data], before: Before)>(([], { _ in }))
+    static let state = Mutex<(bodies: [Data], replies: [Data], before: Before)>(([], [], { _ in }))
 
     static func reset(before: @escaping Before = { _ in }) {
-        state.withLock { $0 = ([], before) }
+        state.withLock { $0 = ([], [], before) }
     }
 
     static var requests: [SyncRequest] {
         get throws { try state.withLock { $0.bodies }.map { try JSONDecoder().decode(SyncRequest.self, from: $0) } }
+    }
+
+    static var responses: [SyncResponse] {
+        get throws { try state.withLock { $0.replies }.map { try JSONDecoder().decode(SyncResponse.self, from: $0) } }
     }
 
     static func session() -> URLSession {
@@ -244,6 +248,7 @@ final class Relay: URLProtocol {
             do {
                 try await before(index)
                 let (data, response) = try await URLSession.shared.data(for: forwarded)
+                Self.state.withLock { $0.replies.append(data) }
                 relay.client?.urlProtocol(relay, didReceive: response, cacheStoragePolicy: .notAllowed)
                 relay.client?.urlProtocol(relay, didLoad: data)
                 relay.client?.urlProtocolDidFinishLoading(relay)

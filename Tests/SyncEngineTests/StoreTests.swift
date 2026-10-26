@@ -1,4 +1,5 @@
 import GRDB
+import Synchronization
 import XCTest
 @testable import SyncEngine
 
@@ -113,6 +114,28 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(try pool.strings("SELECT id || ':' || title FROM notes ORDER BY id"), ["n1:server 1", "n2:local 2"])
         XCTAssertEqual(try pool.outbox(), [OutboxRow(seq: 2, table: "notes", id: "n2", op: "insert", col: nil)])
         XCTAssertEqual(try pool.int("SELECT value FROM _meta WHERE key = 'cursor'"), 7)
+    }
+
+    func testAnUnchangedPulledRowIsNotRewrittenAndAChangedOneIs() throws {
+        let (pool, store) = try Fixture.migratedPool()
+        let tag = { (weight: JSONValue) in PulledRow(table: "tags", id: "t1", deleted: 0, values: ["name": .string("x"), "weight": weight, "color": .null]) }
+        try pool.write { try store.apply(Fixture.response(head: 1, rows: [Fixture.note("n1", title: "a"), tag(.integer(2))]), $0) }
+        let commits = Mutex<[String]>([])
+        let observation = DatabaseRegionObservation(tracking: Table("notes"), Table("tags"))
+        let cancellable = try observation.start(in: pool, onError: { XCTFail("\($0)") }, onChange: { db in
+            let notes = try! String.fetchAll(db, sql: "SELECT title || ':' || coalesce(body, 'null') FROM notes")
+            commits.withLock { $0.append(notes.joined(separator: ",")) }
+        })
+        defer { cancellable.cancel() }
+
+        try pool.write { try store.apply(Fixture.response(head: 2, rows: [Fixture.note("n1", title: "a"), tag(.integer(2))]), $0) }
+        XCTAssertEqual(commits.withLock { $0 }, [])
+        XCTAssertEqual(try pool.int("SELECT value FROM _meta WHERE key = 'cursor'"), 2)
+
+        try pool.write { try store.apply(Fixture.response(head: 3, rows: [Fixture.note("n1", title: "a", body: "b")]), $0) }
+        try pool.write { try store.apply(Fixture.response(head: 4, rows: [Fixture.note("n1", title: "a")]), $0) }
+        XCTAssertEqual(commits.withLock { $0 }, ["a:b", "a:null"])
+        XCTAssertEqual(try pool.outbox(), [])
     }
 
     func testTriggersAreSilentDuringApply() throws {

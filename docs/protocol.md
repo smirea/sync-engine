@@ -151,10 +151,10 @@ Otherwise, in one transaction:
 
 1. Set `_meta.applying = 1`. Read `_meta.after` and `_meta.snapshot_head`; together they say a paged snapshot is in progress.
 2. If `snapshot` and no snapshot is in progress, delete every row of every app table except rows that have a pending `_outbox` entry with `seq > acked`. A page requested with `after` never wipes.
-3. For each row, skip it when `_outbox` holds a pending entry for its `(table, id)` whose `seq` is above `acked` (the next sync re-sends that write and the row comes back merged); otherwise `DELETE` for a tombstone or upsert (`INSERT ... ON CONFLICT (id) DO UPDATE SET`) for a live row.
+3. For each row, skip it when `_outbox` holds a pending entry for its `(table, id)` whose `seq` is above `acked` (the next sync re-sends that write and the row comes back merged); otherwise `DELETE` for a tombstone or upsert (`INSERT ... ON CONFLICT (id) DO UPDATE SET ... WHERE (columns) IS NOT (excluded columns)`) for a live row. The `WHERE` leaves a row whose values already match untouched, so the echo of the client's own write fires no update hook.
 4. Delete `_outbox` rows with `seq <= acked`.
 5. If `next` is set: store `_meta.after := next` and `_meta.snapshot_head := snapshot_head ?? head`, leave `_meta.cursor` alone. Else: `_meta.cursor := snapshot_head ?? head` and delete `after` and `snapshot_head`.
-6. Set `_meta.applying = 0`. Then notify observers of the touched tables.
+6. Set `_meta.applying = 0`. Then notify observers of the tables where a row was inserted, updated or deleted.
 
 The cursor lands on the **first** page's head, not the last, so a row that changed while later pages were fetched is re-pulled by the next delta.
 

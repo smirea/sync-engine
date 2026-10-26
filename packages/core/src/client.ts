@@ -91,23 +91,21 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 			for (const pulled of response.rows) {
 				const table = tables.get(pulled.table);
 				if (!table || pending.has(rowKey(pulled.table, pulled.id))) continue;
-				touched.add(table.name);
-				if (pulled.deleted) {
-					driver.exec(`DELETE FROM ${table.name} WHERE id = ?`, [pulled.id]);
-					continue;
-				}
 				const columns = table.columns.filter(c => c.name !== 'id');
-				upsert(
-					driver,
-					table.name,
-					pulled.id,
-					Object.fromEntries(
-						columns.map(c => {
-							const value = pulled.values[c.name];
-							return [c.name, value === undefined ? (c.default ?? null) : value];
-						}),
-					),
-				);
+				const changed = pulled.deleted
+					? driver.exec(`DELETE FROM ${table.name} WHERE id = ? RETURNING 1`, [pulled.id]).length > 0
+					: upsert(
+							driver,
+							table.name,
+							pulled.id,
+							Object.fromEntries(
+								columns.map(c => {
+									const value = pulled.values[c.name];
+									return [c.name, value === undefined ? (c.default ?? null) : value];
+								}),
+							),
+						);
+				if (changed) touched.add(table.name);
 			}
 			driver.exec('DELETE FROM _outbox WHERE seq <= ?', [acked]);
 			const head = progress?.head ?? response.head;
