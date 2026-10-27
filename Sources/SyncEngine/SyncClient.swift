@@ -25,6 +25,8 @@ public final class SyncClient {
     @ObservationIgnored private let endpoint: URL
     @ObservationIgnored private let token: @Sendable () -> String?
     @ObservationIgnored private let session: URLSession
+    @ObservationIgnored private let headers: [String: String]
+    @ObservationIgnored private let beforePush: (@Sendable () async throws -> Void)?
     @ObservationIgnored private let log = Logger(subsystem: "sync-engine", category: "client")
     @ObservationIgnored private var clientID = ""
     @ObservationIgnored private var outbox: AnyDatabaseCancellable?
@@ -44,12 +46,25 @@ public final class SyncClient {
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private var monitor: NWPathMonitor?
 
-    public init(database: DatabasePool, schema: SyncSchema, endpoint: URL, token: @escaping @Sendable () -> String?, session: URLSession = .shared) {
+    /// `headers` go on every sync request, such as the app's own client header. `beforePush` runs before a sync that
+    /// sends writes, such as to upload files the rows name, so a reader never sees a row before what it points at; a
+    /// throw fails the sync, which retries like any other failure, and the writes wait.
+    public init(
+        database: DatabasePool,
+        schema: SyncSchema,
+        endpoint: URL,
+        token: @escaping @Sendable () -> String?,
+        session: URLSession = .shared,
+        headers: [String: String] = [:],
+        beforePush: (@Sendable () async throws -> Void)? = nil
+    ) {
         self.database = database
         store = SyncStore(schema: schema)
         self.endpoint = endpoint
         self.token = token
         self.session = session
+        self.headers = headers
+        self.beforePush = beforePush
     }
 
     isolated deinit {
@@ -107,6 +122,23 @@ public final class SyncClient {
         schedule(after: .zero)
     }
 
+    /// Waits for a sync in flight, then empties every app table and the outbox and starts over under a new client id at
+    /// cursor 0, as a fresh database would: for an app that signs another user in on the same device. Call it stopped.
+    public func reset() async throws {
+        await chain?.value
+        let store = store
+        let client = try await database.write { db in
+            try store.reset(db)
+            return try store.meta("client", db) ?? ""
+        }
+        clientID = client
+        head = 0
+        liveHead = 0
+        rejected = []
+        snapshotRows = nil
+        status = .idle
+    }
+
     public func stop() {
         running = false
         reconcileLoops()
@@ -138,6 +170,7 @@ public final class SyncClient {
         do {
             let store = store
             var collected = try await database.read { try store.collect($0) }
+            if !collected.writes.isEmpty, let beforePush { try await beforePush() }
             while true {
                 let (cursor, progress) = try await database.read { db in (try store.cursor(db), try store.snapshot(db)) }
                 let request = SyncRequest(protocol: 2, client: clientID, cursor: cursor, writes: collected.writes, after: progress?.after)
@@ -192,6 +225,7 @@ public final class SyncClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         request.httpBody = try JSONEncoder().encode(body)
         let (data, response) = try await session.data(for: request)
         switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
