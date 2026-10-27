@@ -21,6 +21,11 @@ export type SyncClientOptions = {
 	/** Milliseconds between periodic syncs while started. */
 	interval?: number;
 	/**
+	 * Runs before a sync that sends writes, such as to upload files the rows name so a reader never sees a row before
+	 * what it points at. A throw fails the sync, which retries like any other failure, and the writes wait.
+	 */
+	beforePush?: () => Promise<void>;
+	/**
 	 * Longest wait in milliseconds before a failed sync is retried or a dropped socket is reopened. Also the tick at
 	 * which an open socket is pinged and a closed one pulls over HTTP, so an outage costs at most this per side.
 	 */
@@ -137,6 +142,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	async function once(): Promise<SyncResponse> {
 		try {
 			let batch = core.collect();
+			if (batch.writes.length && options.beforePush) await options.beforePush();
 			let response: SyncResponse;
 			do {
 				response = await post(batch.writes);

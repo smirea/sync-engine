@@ -23,6 +23,8 @@ export type SyncWorkerOptions = {
 	token?: string | null;
 	/** Sent with every sync request, such as an app's own client header. */
 	headers?: Record<string, string>;
+	/** Runs in the host's worker before a sync that sends writes; see `SyncClientOptions.beforePush`. */
+	beforePush?: () => Promise<void>;
 	interval?: number;
 	maxBackoff?: number;
 	/** Where `sqlite3.wasm` is served from, when the bundler does not resolve it next to the worker script. */
@@ -149,6 +151,7 @@ export function startSyncWorker(options: SyncWorkerOptions): void {
 			endpoint: options.endpoint,
 			token: token ?? undefined,
 			headers: options.headers,
+			beforePush: options.beforePush,
 			interval: options.interval,
 			maxBackoff: options.maxBackoff,
 		};

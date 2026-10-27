@@ -410,3 +410,26 @@ describe('live socket that died silently', () => {
 		await until(() => b.client.status().live);
 	}, 5000);
 });
+
+describe('beforePush', () => {
+	test('runs before a sync that sends writes, and its throw keeps the writes for the retry', async () => {
+		const { endpoint, dump } = server();
+		let fail = true;
+		const calls: number[] = [];
+		const a = peer(endpoint, {
+			beforePush: async () => {
+				calls.push(Date.now());
+				if (fail) throw new Error('upload the files first');
+			},
+		});
+		await a.client.sync();
+		expect(calls).toHaveLength(0);
+		insert(a.db, 'n1', 'needs a file');
+		await expect(a.client.sync()).rejects.toThrow('upload the files first');
+		expect(a.client.status().pending).toBe(1);
+		fail = false;
+		await a.client.sync();
+		expect(calls).toHaveLength(2);
+		expect(dump().notes!.map(row => row.id)).toEqual(['n1']);
+	});
+});
