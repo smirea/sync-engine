@@ -433,3 +433,24 @@ describe('beforePush', () => {
 		expect(dump().notes!.map(row => row.id)).toEqual(['n1']);
 	});
 });
+
+describe('reset', () => {
+	test('refuses while the loop runs, and clears the status it leaves', async () => {
+		const { endpoint } = server();
+		const a = peer(endpoint);
+		insert(a.db, 'n1', 'one');
+		await a.client.sync();
+		a.client.start();
+		await expect(a.client.reset()).rejects.toThrow('stop() the sync client before reset()');
+		a.client.stop();
+		await a.client.reset();
+		expect(a.rows()).toEqual([]);
+		expect(a.client.status()).toMatchObject({
+			pending: 0,
+			cursor: 0,
+			lastError: null,
+			unauthorized: false,
+			rejected: [],
+		});
+	});
+});

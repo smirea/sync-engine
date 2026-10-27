@@ -125,6 +125,7 @@ public final class SyncClient {
     /// Waits for a sync in flight, then empties every app table and the outbox and starts over under a new client id at
     /// cursor 0, as a fresh database would: for an app that signs another user in on the same device. Call it stopped.
     public func reset() async throws {
+        guard !running else { throw SyncSchemaError(description: "stop() the sync client before reset(): a running loop would pull the old rows back") }
         await chain?.value
         let store = store
         let client = try await database.write { db in

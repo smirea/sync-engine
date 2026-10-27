@@ -58,6 +58,31 @@ describe('admit', () => {
 		expect(driver.exec('SELECT id, author FROM notes')).toEqual([{ id: 'a', author: 'ann' }]);
 	});
 
+	test('a skipped write gets the server row back, and a throw or a moved write refuses only that write', () => {
+		const { sync } = setup({
+			admit(write) {
+				if (write.id === 'boom') throw new Error('no such rule');
+				if (write.id === 'moved') return { ...write, id: 'elsewhere' };
+				if (write.op === 'put' && write.values.title === 'skip') return null;
+				return write;
+			},
+		});
+		sync('ann', [put(1, 'a', { owner: 'ann', title: 'kept' })]);
+		const response = sync('ann', [
+			put(2, 'a', { owner: 'ann', title: 'skip' }),
+			put(3, 'boom', { owner: 'ann', title: 'x' }),
+			put(4, 'moved', { owner: 'ann', title: 'x' }),
+			put(5, 'b', { owner: 'ann', title: 'lands' }),
+		]);
+		expect(response.rejected.map(r => `${r.id}: ${r.reason}`)).toEqual([
+			'boom: admit failed: no such rule',
+			"moved: admit changed the write's table, id or op",
+		]);
+		expect(response.acked).toBe(5);
+		const a = response.rows.find(row => row.id === 'a');
+		expect(a && !a.deleted && a.values.title).toBe('kept');
+	});
+
 	test('a refused write is not replayed by a retry', () => {
 		const { sync } = setup(ownOnly);
 		sync('ann', [put(1, 'b', { owner: 'bob', title: 'theirs' })]);
@@ -149,6 +174,16 @@ describe('view', () => {
 		expect(ids(opened.rows)).toEqual(['grants:bob:a:0', 'notes:a:0']);
 		space.write([{ table: 'grants', id: 'bob:a', op: 'delete' }], { user: 'ann' });
 		expect(ids(sync('bob', [], opened.head).rows)).toEqual(['grants:bob:a:1', 'notes:a:1']);
+	});
+
+	test('a row that changed in the delta that also took its grant away comes back as a tombstone', () => {
+		const { space, sync } = shareSetup();
+		sync('ann', [put(1, 'a', { owner: 'ann', title: 'one' })]);
+		space.write([{ table: 'grants', id: 'bob:a', op: 'put', values: { reader: 'bob', note: 'a' } }], { user: 'ann' });
+		const cursor = sync('bob', []).head;
+		sync('ann', [put(2, 'a', { owner: 'ann', title: 'renamed' })]);
+		space.write([{ table: 'grants', id: 'bob:a', op: 'delete' }], { user: 'ann' });
+		expect(ids(sync('bob', [], cursor).rows).toSorted()).toEqual(['grants:bob:a:1', 'notes:a:1']);
 	});
 
 	test('a refused write the reader cannot see comes back as a tombstone', () => {

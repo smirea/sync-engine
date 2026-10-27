@@ -208,7 +208,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 			return table ? current(table, String(change.id), change.deleted) : [];
 		});
 
-	function withRejected(rows: PulledRow[], rejected: Rejected[]): PulledRow[] {
+	function withRejected(rows: PulledRow[], rejected: readonly { table: string; id: string }[]): PulledRow[] {
 		const seen = new Set(rows.map(row => rowKey(row.table, row.id)));
 		for (const { table: name, id } of rejected) {
 			const table = tables.get(name);
@@ -220,8 +220,12 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 		return rows;
 	}
 
-	/** The reader's rows: a live row it does not see is dropped, or becomes a tombstone when `hide` names it. */
-	function filtered(view: View, rows: readonly PulledRow[], hide: ReadonlySet<string>): PulledRow[] {
+	/**
+	 * The reader's rows. A live row it does not see becomes a tombstone in a delta, since the reader may hold it from
+	 * before it dropped out of view (a lost grant, a row moved away), and in a snapshot when `hide` names it, as for a
+	 * refused write; otherwise a snapshot drops it, since its wipe already removed it.
+	 */
+	function filtered(view: View, rows: readonly PulledRow[], delta: boolean, hide: ReadonlySet<string>): PulledRow[] {
 		const seen = new Set<string>();
 		const out: PulledRow[] = [];
 		for (const row of rows) {
@@ -229,7 +233,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 			if (seen.has(key)) continue;
 			seen.add(key);
 			if (row.deleted || view.sees(row.table, row.values)) out.push(row);
-			else if (hide.has(key)) out.push({ table: row.table, id: row.id, deleted: 1 });
+			else if (delta || hide.has(key)) out.push({ table: row.table, id: row.id, deleted: 1 });
 		}
 		return out;
 	}
@@ -298,26 +302,51 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 	};
 
 	/**
+	 * Runs `admit` on one checked write. A throw refuses that write alone instead of failing the client's every sync,
+	 * and the write it answers is checked again, so a stamp of the wrong type is refused like a client's, and it may
+	 * not move to another table, row, or op.
+	 */
+	function admitted(table: Table, write: Write, context: C): Write | string | null {
+		let outcome: Write | string | null;
+		try {
+			outcome = hooks.admit!(write, context);
+		} catch (error) {
+			return `admit failed: ${error instanceof Error ? error.message : String(error)}`;
+		}
+		if (outcome === null || typeof outcome === 'string') return outcome;
+		if (outcome.table !== write.table || outcome.id !== write.id || outcome.op !== write.op) {
+			return "admit changed the write's table, id or op";
+		}
+		return checked(table, outcome);
+	}
+
+	/**
 	 * Applies writes in the given order as `client` and answers the refusals. The head advances in `_meta` as each write
 	 * counts, so the derived writes of `landed` follow on from it.
 	 */
-	function applyAll(client: string, writes: readonly Write[], context: C): Rejected[] {
+	function applyAll(
+		client: string,
+		writes: readonly Write[],
+		context: C,
+	): { rejected: Rejected[]; skipped: { table: string; id: string }[] } {
 		const rejected: Rejected[] = [];
+		const skipped: { table: string; id: string }[] = [];
 		const counted: Write[] = [];
 
 		for (const write of writes) {
 			const table = tables.get(write.table);
 			let outcome: Write | string | null = table ? checked(table, write) : `unknown table ${write.table}`;
-			if (outcome !== null && typeof outcome !== 'string' && hooks.admit) outcome = hooks.admit(outcome, context);
+			if (outcome !== null && typeof outcome !== 'string' && hooks.admit) outcome = admitted(table!, outcome, context);
 			if (typeof outcome === 'string') {
 				rejected.push({ seq: write.seq, table: write.table, id: write.id, reason: outcome });
 				continue;
 			}
-			if (outcome && apply(client, table!, outcome)) counted.push(outcome);
+			if (!outcome) skipped.push({ table: write.table, id: write.id });
+			else if (apply(client, table!, outcome)) counted.push(outcome);
 		}
 
 		if (counted.length && hooks.landed) hooks.landed(counted, context, writer);
-		return rejected;
+		return { rejected, skipped };
 	}
 
 	const writer: ServerWriter = (() => {
@@ -346,7 +375,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 				last = write.seq;
 				fresh.push(write);
 			}
-			const rejected = applyAll(request.client, fresh, context);
+			const { rejected, skipped } = applyAll(request.client, fresh, context);
 
 			if (last !== acked) {
 				driver.exec(
@@ -363,11 +392,13 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 				? snapshot(paged ? (request.after ?? null) : null, paged ? pageSize : null)
 				: { rows: delta(request.cursor), next: null };
 			const view = hooks.view?.(context);
+			// A skipped write was acked without landing, so the client gets the server's row back like a refused one.
+			const repaired = [...rejected, ...skipped];
 			let rows = withRejected(
 				view?.expand && !snapshotting ? [...page.rows, ...view.expand(page.rows)] : page.rows,
-				rejected,
+				repaired,
 			);
-			if (view) rows = filtered(view, rows, new Set(rejected.map(r => rowKey(r.table, r.id))));
+			if (view) rows = filtered(view, rows, !snapshotting, new Set(repaired.map(r => rowKey(r.table, r.id))));
 			const response: SyncResponse = { head, acked: last, rejected, snapshot: snapshotting, rows };
 			if (paged) response.next = page.next;
 			if (now() - meta('compacted_at') > compactEvery) compactNow();
@@ -377,7 +408,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 
 	function write(writes: readonly ServerWrite[], context: C, { atomic = false } = {}) {
 		const run = () => {
-			const rejected = applyAll(
+			const { rejected } = applyAll(
 				SERVER_CLIENT,
 				writes.map(write => ({ ...write, seq: 0 }) as Write),
 				context,

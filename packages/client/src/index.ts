@@ -98,6 +98,9 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	const statusListeners = new Set<(status: SyncStatus) => void>();
 	let migrated = false;
 	let unauthorized = false;
+	// Moves on each start() and explicit sync(), so a 401 from a run begun under the previous token is not held against
+	// the new one.
+	let epoch = 0;
 	let rejected: Rejected[] = [];
 	let run: Run = { kind: 'idle' };
 	let lastError: string | null = null;
@@ -140,6 +143,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	}
 
 	async function once(): Promise<SyncResponse> {
+		const began = epoch;
 		try {
 			let batch = core.collect();
 			if (batch.writes.length && options.beforePush) await options.beforePush();
@@ -153,10 +157,11 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 				snapshotRows = core.snapshot() ? snapshotRows + response.rows.length : 0;
 			} while (core.snapshot());
 			lastError = null;
+			unauthorized = false;
 			return response;
 		} catch (error) {
 			lastError = error instanceof Error ? error.message : String(error);
-			if (error instanceof Unauthorized) unauthorized = true;
+			if (error instanceof Unauthorized && began === epoch) unauthorized = true;
 			throw error;
 		}
 	}
@@ -207,6 +212,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 
 	function sync(): Promise<SyncResponse> {
 		unauthorized = false;
+		epoch++;
 		return serialized();
 	}
 
@@ -305,6 +311,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			ready();
 			if (live) return;
 			unauthorized = false;
+			epoch++;
 			const state: Live = {
 				socket: null,
 				heard: true,
@@ -352,10 +359,16 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		},
 		async reset() {
 			ready();
+			if (live) throw new Error('stop() the sync client before reset(): a running loop would pull the old rows back');
 			while (run.kind !== 'idle') await run.done.catch(() => {});
 			rejected = [];
+			lastError = null;
+			unauthorized = false;
+			snapshotRows = 0;
+			touched.clear();
 			const tables = core.reset();
 			for (const listener of listeners) listener(tables);
+			announce();
 		},
 		clientId() {
 			ready();
