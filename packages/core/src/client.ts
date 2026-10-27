@@ -13,6 +13,11 @@ export type Client = {
 	snapshot(): SnapshotProgress | null;
 	pending(): number;
 	clientId(): string;
+	/**
+	 * Empties every app table and the outbox and starts over under a new client id at cursor 0, as a fresh database
+	 * would: for an app that signs another user in on the same device. Captures nothing. Answers the tables it emptied.
+	 */
+	reset(): Set<string>;
 };
 
 type Group = { table: string; id: string; seq: number; ops: string[]; cols: Set<string> };
@@ -122,13 +127,23 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 		});
 	}
 
+	const start = () =>
+		driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", [crypto.randomUUID()]);
+
 	return {
 		migrate() {
 			migrate(driver, schema, 'client');
-			driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", [
-				crypto.randomUUID(),
-			]);
+			start();
 		},
+		reset: () =>
+			driver.transaction(() => {
+				setMeta('applying', 1);
+				for (const table of schema.tables) driver.exec(`DELETE FROM ${table.name}`);
+				driver.exec('DELETE FROM _outbox');
+				driver.exec('DELETE FROM _meta');
+				start();
+				return new Set(schema.tables.map(table => table.name));
+			}),
 		collect,
 		apply,
 		cursor: () => Number(meta('cursor')),

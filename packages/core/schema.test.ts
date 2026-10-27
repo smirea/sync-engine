@@ -52,10 +52,16 @@ describe('defineSchema', () => {
 			'a: every synced table needs id TEXT PRIMARY KEY',
 		);
 		expect(() => defineSchema({ tables: { a: sqliteTable('a', { id, camelCase: text('camelCase') }) } })).toThrow(
-			'a.camelCase: column name camelCase must match',
+			'a.camelCase: name camelCase must match',
 		);
 		expect(() => defineSchema({ tables: { a: sqliteTable('Bad-Name', { id }) } })).toThrow(
-			'table name Bad-Name must match',
+			'table Bad-Name: name Bad-Name must match',
+		);
+		expect(() => defineSchema({ tables: { a: sqliteTable('a', { id, order: real('order') }) } })).toThrow(
+			'a.order: order is an SQLite keyword',
+		);
+		expect(() => defineSchema({ tables: { a: sqliteTable('group', { id }) } })).toThrow(
+			'table group: group is an SQLite keyword',
 		);
 		expect(() =>
 			defineSchema({ tables: { a: sqliteTable('a', { id, at: integer('at').default(sql`(unixepoch())`) }) } }),

@@ -45,6 +45,16 @@ struct SyncStore: Sendable {
         try db.execute(sql: "INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", arguments: [UUID().uuidString.lowercased()])
     }
 
+    /// Empties every app table and the outbox, with `applying` set so nothing is captured, then mints a new client id at
+    /// cursor 0.
+    func reset(_ db: Database) throws {
+        try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 1)")
+        for table in schema.tables { try db.execute(sql: "DELETE FROM \(table.name)") }
+        try db.execute(sql: "DELETE FROM _outbox")
+        try db.execute(sql: "DELETE FROM _meta")
+        try db.execute(sql: "INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", arguments: [UUID().uuidString.lowercased()])
+    }
+
     private func columns(of table: String, _ db: Database) throws -> Set<String> {
         Set(try String.fetchAll(db, sql: "SELECT name FROM pragma_table_info(?)", arguments: [table]))
     }

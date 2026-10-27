@@ -97,6 +97,8 @@ describe('createSyncClient over HTTP', () => {
 			cursor: 2,
 			lastError: null,
 			snapshot: null,
+			unauthorized: false,
+			rejected: [],
 		});
 
 		await b.client.sync();
@@ -154,6 +156,8 @@ describe('createSyncClient over HTTP', () => {
 			cursor: 5,
 			lastError: null,
 			snapshot: null,
+			unauthorized: false,
+			rejected: [],
 		});
 	});
 
@@ -257,12 +261,66 @@ describe('createSyncClient over HTTP', () => {
 			cursor: 0,
 			lastError: 'sync failed with 401: unauthorized',
 			snapshot: null,
+			unauthorized: true,
+			rejected: [],
 		});
 
 		const right = peer(endpoint, { token: 'secret' });
 		insert(right.db, 'n2', 'sent');
 		expect((await right.client.sync()).acked).toBe(1);
 		expect(right.client.status().pending).toBe(0);
+	});
+
+	test('after a 401 nothing syncs on its own until start or sync', async () => {
+		let requests = 0;
+		const statuses: SyncStatus[] = [];
+		const refused = peer('http://127.0.0.1:1', {
+			token: 'expired',
+			maxBackoff: 20,
+			fetch: (async () => {
+				requests++;
+				return new Response('unauthorized', { status: 401 });
+			}) as unknown as typeof fetch,
+			WebSocket: class {
+				static OPEN = 1;
+				readyState = 0;
+				addEventListener() {}
+				close() {}
+			} as unknown as typeof WebSocket,
+		});
+		refused.client.onStatus(status => statuses.push(status));
+		refused.client.start();
+		await until(() => requests > 0);
+		insert(refused.db, 'n1', 'waits');
+		refused.client.markDirty();
+		await Bun.sleep(250);
+		expect(requests).toBe(1);
+		expect(statuses.at(-1)?.unauthorized).toBe(true);
+		await expect(refused.client.sync()).rejects.toThrow('401');
+		expect(requests).toBe(2);
+		refused.client.start();
+		await until(() => requests === 3);
+	});
+
+	test('keeps the writes the server refused, newest first', async () => {
+		const reply = (rejected: SyncResponse['rejected']): SyncResponse => ({
+			head: 0,
+			acked: 2,
+			rejected,
+			snapshot: false,
+			rows: [],
+			next: null,
+		});
+		const answers = [
+			reply([{ seq: 1, table: 'notes', id: 'a', reason: 'first' }]),
+			reply([{ seq: 2, table: 'notes', id: 'b', reason: 'second' }]),
+		];
+		const client = peer('http://127.0.0.1:1', {
+			fetch: (async () => Response.json(answers.shift())) as unknown as typeof fetch,
+		});
+		await client.client.sync();
+		await client.client.sync();
+		expect(client.client.status().rejected.map(r => r.reason)).toEqual(['second', 'first']);
 	});
 
 	test('reconnects after the server restarts and receives the next nudge', async () => {
@@ -353,4 +411,48 @@ describe('live socket that died silently', () => {
 		sockets.restore();
 		await until(() => b.client.status().live);
 	}, 5000);
+});
+
+describe('beforePush', () => {
+	test('runs before a sync that sends writes, and its throw keeps the writes for the retry', async () => {
+		const { endpoint, dump } = server();
+		let fail = true;
+		const calls: number[] = [];
+		const a = peer(endpoint, {
+			beforePush: async () => {
+				calls.push(Date.now());
+				if (fail) throw new Error('upload the files first');
+			},
+		});
+		await a.client.sync();
+		expect(calls).toHaveLength(0);
+		insert(a.db, 'n1', 'needs a file');
+		await expect(a.client.sync()).rejects.toThrow('upload the files first');
+		expect(a.client.status().pending).toBe(1);
+		fail = false;
+		await a.client.sync();
+		expect(calls).toHaveLength(2);
+		expect(dump().notes!.map(row => row.id)).toEqual(['n1']);
+	});
+});
+
+describe('reset', () => {
+	test('refuses while the loop runs, and clears the status it leaves', async () => {
+		const { endpoint } = server();
+		const a = peer(endpoint);
+		insert(a.db, 'n1', 'one');
+		await a.client.sync();
+		a.client.start();
+		await expect(a.client.reset()).rejects.toThrow('stop() the sync client before reset()');
+		a.client.stop();
+		await a.client.reset();
+		expect(a.rows()).toEqual([]);
+		expect(a.client.status()).toMatchObject({
+			pending: 0,
+			cursor: 0,
+			lastError: null,
+			unauthorized: false,
+			rejected: [],
+		});
+	});
 });

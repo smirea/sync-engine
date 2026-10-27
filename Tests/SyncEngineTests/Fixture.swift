@@ -90,6 +90,7 @@ final class StubServer: URLProtocol {
     struct Received: Sendable {
         let url: URL
         let authorization: String?
+        let headers: [String: String]
         let body: Data
         let at = ContinuousClock.now
     }
@@ -129,7 +130,7 @@ final class StubServer: URLProtocol {
 
     override func startLoading() {
         let body = request.streamedBody
-        let received = Received(url: request.url!, authorization: request.value(forHTTPHeaderField: "Authorization"), body: body)
+        let received = Received(url: request.url!, authorization: request.value(forHTTPHeaderField: "Authorization"), headers: request.allHTTPHeaderFields ?? [:], body: body)
         let (reply, latency) = Self.state.withLock { state in
             state.received.append(received)
             return (state.reply, state.latency)

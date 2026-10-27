@@ -39,6 +39,41 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(try pool.outbox(), [])
     }
 
+    func testBeforePushRunsBeforeWritesLeaveAndItsThrowKeepsThem() async throws {
+        struct NotYet: Error {}
+        let pool = try Fixture.pool()
+        let calls = Calls()
+        let client = SyncClient(
+            database: pool, schema: Fixture.schema, endpoint: URL(string: "http://127.0.0.1:9/v1/")!, token: { "secret" },
+            session: StubServer.session(), headers: ["x-app": "test"],
+            beforePush: { if await calls.next() == 1 { throw NotYet() } }
+        )
+        try client.migrate()
+        StubServer.reset(StubServer.json(200, Fixture.response(head: 1, acked: 1)))
+        await client.sync()
+        XCTAssertEqual(StubServer.received.count, 1)
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
+        try await waitUntil { client.pending == 1 }
+        await client.sync()
+        XCTAssertEqual(StubServer.received.count, 1)
+        XCTAssertEqual(client.pending, 1)
+        await client.sync()
+        XCTAssertEqual(StubServer.received.count, 2)
+        XCTAssertEqual(StubServer.received[1].headers["x-app"], "test")
+        try await waitUntil { client.pending == 0 }
+    }
+
+    func testResetEmptiesTheTablesAndTheOutboxUnderANewClient() async throws {
+        let (client, pool) = try client()
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
+        let before = try pool.strings("SELECT value FROM _meta WHERE key = 'client'")[0]
+        try await client.reset()
+        XCTAssertEqual(try pool.strings("SELECT id FROM notes"), [])
+        XCTAssertEqual(try pool.outbox(), [])
+        XCTAssertNotEqual(try pool.strings("SELECT value FROM _meta WHERE key = 'client'")[0], before)
+        XCTAssertEqual(client.head, 0)
+    }
+
     func testA401SetsUnauthorizedAndOnlyAnExplicitSyncTriesAgain() async throws {
         let (client, pool) = try client()
         StubServer.reset(.http(401, Data()))
@@ -162,5 +197,13 @@ final class ClientTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertTrue(condition())
+    }
+}
+
+private actor Calls {
+    private var count = 0
+    func next() -> Int {
+        count += 1
+        return count
     }
 }

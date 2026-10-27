@@ -1,6 +1,7 @@
 import type { DrizzleConfig } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import type { SqlValue, SyncResponse } from '../../core/src/index.ts';
+import type { SyncStatus } from '../../client/src/index.ts';
 import {
 	SyncWebError,
 	type Call,
@@ -16,6 +17,7 @@ import {
 export { SyncWebError };
 export type { ErrorCode, QueryResult, Statement, WebSyncStatus } from './protocol.ts';
 export type { SyncWorkerOptions } from './worker.ts';
+export type { SyncStatus };
 
 export type WebDatabase = {
 	exec(sql: string, params?: SqlValue[]): Promise<QueryResult>;
@@ -25,8 +27,12 @@ export type WebDatabase = {
 	status(): Promise<WebSyncStatus>;
 	/** A string starts or re-authenticates the sync loop, `null` stops it. Reaches every tab's worker. */
 	setToken(token: string | null): Promise<void>;
+	/** Empties the database for every tab, as a fresh one: before another user signs in. Stop the loop first. */
+	reset(): Promise<void>;
 	/** Fires with the tables a local write or a pull touched, in this tab or any other. */
 	onChange(listener: (tables: ReadonlySet<string>) => void): () => void;
+	/** Fires with the host's status after each of its syncs settles, failed or not, in every tab. */
+	onStatus(listener: (status: SyncStatus) => void): () => void;
 	/** Closes this tab's worker. Another tab's worker takes over the database when this one hosted it. */
 	close(): Promise<void>;
 };
@@ -36,6 +42,7 @@ type Pending = { resolve: (value: unknown) => void; reject: (error: SyncWebError
 export function openSyncDatabase({ worker }: { worker: Worker }): WebDatabase {
 	const pending = new Map<number, Pending>();
 	const listeners = new Set<(tables: ReadonlySet<string>) => void>();
+	const statusListeners = new Set<(status: SyncStatus) => void>();
 	let next = 1;
 	let closed = false;
 
@@ -44,6 +51,10 @@ export function openSyncDatabase({ worker }: { worker: Worker }): WebDatabase {
 		pending.clear();
 	};
 	worker.addEventListener('message', ({ data }: MessageEvent<ToTab>) => {
+		if (data.kind === 'sync-status') {
+			for (const listener of statusListeners) listener(data.status);
+			return;
+		}
 		if (!('id' in data)) {
 			const tables = new Set(data.tables);
 			for (const listener of listeners) listener(tables);
@@ -72,9 +83,14 @@ export function openSyncDatabase({ worker }: { worker: Worker }): WebDatabase {
 		sync: () => call('sync', {}),
 		status: () => call('status', {}),
 		setToken: async token => void (await call('setToken', { token })),
+		reset: async () => void (await call('reset', {})),
 		onChange(listener) {
 			listeners.add(listener);
 			return () => void listeners.delete(listener);
+		},
+		onStatus(listener) {
+			statusListeners.add(listener);
+			return () => void statusListeners.delete(listener);
 		},
 		async close() {
 			await call('close', {});
