@@ -298,6 +298,8 @@ describe('createSyncClient over HTTP', () => {
 		expect(statuses.at(-1)?.unauthorized).toBe(true);
 		await expect(refused.client.sync()).rejects.toThrow('401');
 		expect(requests).toBe(2);
+		refused.client.start();
+		await until(() => requests === 3);
 	});
 
 	test('keeps the writes the server refused, newest first', async () => {

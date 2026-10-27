@@ -309,9 +309,10 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		sync,
 		start() {
 			ready();
-			if (live) return;
 			unauthorized = false;
 			epoch++;
+			// Already running: a start after a 401, as with a new token, resumes the loop it latched.
+			if (live) return background();
 			const state: Live = {
 				socket: null,
 				heard: true,
