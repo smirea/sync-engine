@@ -186,6 +186,13 @@ describe('view', () => {
 		expect(ids(sync('bob', [], cursor).rows).toSorted()).toEqual(['grants:bob:a:1', 'notes:a:1']);
 	});
 
+	test("another reader's changes never reach a reader, not even as tombstones", () => {
+		const { sync } = shareSetup();
+		const cursor = sync('cat', []).head;
+		sync('ann', [put(1, 'a', { owner: 'ann', title: 'private' })]);
+		expect(ids(sync('cat', [], cursor).rows)).toEqual([]);
+	});
+
 	test('a refused write the reader cannot see comes back as a tombstone', () => {
 		const { sync } = shareSetup();
 		sync('ann', [put(1, 'a', { owner: 'ann', title: 'one' })]);

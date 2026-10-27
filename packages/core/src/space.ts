@@ -221,19 +221,21 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 	}
 
 	/**
-	 * The reader's rows. A live row it does not see becomes a tombstone in a delta, since the reader may hold it from
-	 * before it dropped out of view (a lost grant, a row moved away), and in a snapshot when `hide` names it, as for a
-	 * refused write; otherwise a snapshot drops it, since its wipe already removed it.
+	 * The reader's rows: a live row it does not see is dropped, or becomes a tombstone when `hide` names it, as for a
+	 * refused write. A dropped row does not count as sent, so a tombstone `expand` adds for it later still goes out, as
+	 * for a row that changed in the same delta that took the reader's grant away. Other readers' rows never go out as
+	 * tombstones: their ids can name users and grants.
 	 */
-	function filtered(view: View, rows: readonly PulledRow[], delta: boolean, hide: ReadonlySet<string>): PulledRow[] {
-		const seen = new Set<string>();
+	function filtered(view: View, rows: readonly PulledRow[], hide: ReadonlySet<string>): PulledRow[] {
+		const sent = new Set<string>();
 		const out: PulledRow[] = [];
 		for (const row of rows) {
 			const key = rowKey(row.table, row.id);
-			if (seen.has(key)) continue;
-			seen.add(key);
+			if (sent.has(key)) continue;
 			if (row.deleted || view.sees(row.table, row.values)) out.push(row);
-			else if (delta || hide.has(key)) out.push({ table: row.table, id: row.id, deleted: 1 });
+			else if (hide.has(key)) out.push({ table: row.table, id: row.id, deleted: 1 });
+			else continue;
+			sent.add(key);
 		}
 		return out;
 	}
@@ -398,7 +400,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 				view?.expand && !snapshotting ? [...page.rows, ...view.expand(page.rows)] : page.rows,
 				repaired,
 			);
-			if (view) rows = filtered(view, rows, !snapshotting, new Set(repaired.map(r => rowKey(r.table, r.id))));
+			if (view) rows = filtered(view, rows, new Set(repaired.map(r => rowKey(r.table, r.id))));
 			const response: SyncResponse = { head, acked: last, rejected, snapshot: snapshotting, rows };
 			if (paged) response.next = page.next;
 			if (now() - meta('compacted_at') > compactEvery) compactNow();
