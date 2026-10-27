@@ -236,6 +236,10 @@ export function startSyncWorker(options: SyncWorkerOptions): void {
 					} catch (error) {
 						return { id, kind: 'sync', ok: false, error: failure(error, 'sync') };
 					}
+				case 'reset':
+					await host.client.reset();
+					host.touched.clear();
+					return { id, kind: 'reset', ok: true, result: null };
 				case 'status':
 					return {
 						id,

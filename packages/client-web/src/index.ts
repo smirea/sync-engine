@@ -27,6 +27,8 @@ export type WebDatabase = {
 	status(): Promise<WebSyncStatus>;
 	/** A string starts or re-authenticates the sync loop, `null` stops it. Reaches every tab's worker. */
 	setToken(token: string | null): Promise<void>;
+	/** Empties the database for every tab, as a fresh one: before another user signs in. Stop the loop first. */
+	reset(): Promise<void>;
 	/** Fires with the tables a local write or a pull touched, in this tab or any other. */
 	onChange(listener: (tables: ReadonlySet<string>) => void): () => void;
 	/** Fires with the host's status after each of its syncs settles, failed or not, in every tab. */
@@ -81,6 +83,7 @@ export function openSyncDatabase({ worker }: { worker: Worker }): WebDatabase {
 		sync: () => call('sync', {}),
 		status: () => call('status', {}),
 		setToken: async token => void (await call('setToken', { token })),
+		reset: async () => void (await call('reset', {})),
 		onChange(listener) {
 			listeners.add(listener);
 			return () => void listeners.delete(listener);

@@ -605,3 +605,20 @@ describe('protocol 2', () => {
 		});
 	});
 });
+
+describe('reset', () => {
+	test('empties the tables and the outbox, captures nothing, and starts over under a new client id', () => {
+		const { a } = setup();
+		a.db.exec("INSERT INTO notes (id, title) VALUES ('n1', 'kept')");
+		a.sync();
+		a.db.exec("INSERT INTO notes (id, title) VALUES ('n2', 'pending')");
+		const before = a.client.clientId();
+		expect([...a.client.reset()]).toEqual(['notes']);
+		expect(a.rows()).toEqual([]);
+		expect(a.client.pending()).toBe(0);
+		expect(a.client.cursor()).toBe(0);
+		expect(a.client.clientId()).not.toBe(before);
+		a.pull();
+		expect(a.rows().map(row => row.id)).toEqual(['n1']);
+	});
+});

@@ -54,6 +54,11 @@ export type SyncClient = {
 	onChange(listener: (tables: ReadonlySet<string>) => void): () => void;
 	/** Runs after every sync settles, failed or not. */
 	onStatus(listener: (status: SyncStatus) => void): () => void;
+	/**
+	 * Waits for a sync in flight, then empties the database as a fresh one (`Client.reset`) and tells `onChange`. Call
+	 * it stopped, as before another user signs in.
+	 */
+	reset(): Promise<void>;
 	clientId(): string;
 };
 
@@ -338,6 +343,13 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		onStatus(listener) {
 			statusListeners.add(listener);
 			return () => void statusListeners.delete(listener);
+		},
+		async reset() {
+			ready();
+			while (run.kind !== 'idle') await run.done.catch(() => {});
+			rejected = [];
+			const tables = core.reset();
+			for (const listener of listeners) listener(tables);
 		},
 		clientId() {
 			ready();
