@@ -1,6 +1,7 @@
 import {
 	createClient,
 	LIVE_PROTOCOL,
+	type Rejected,
 	type Schema,
 	type SqlDriver,
 	type SyncRequest,
@@ -34,6 +35,13 @@ export type SyncStatus = {
 	lastError: string | null;
 	/** A paged snapshot in progress and the rows this run has applied so far, else null. */
 	snapshot: { rows: number } | null;
+	/**
+	 * The server answered 401. Nothing syncs on its own until `start()` (a new token) or an explicit `sync()`, so a bad
+	 * token costs one request.
+	 */
+	unauthorized: boolean;
+	/** The last 20 writes the server refused, newest first. The server dropped them, so this is their only trace. */
+	rejected: Rejected[];
 };
 
 export type SyncClient = {
@@ -44,8 +52,14 @@ export type SyncClient = {
 	markDirty(): void;
 	status(): SyncStatus;
 	onChange(listener: (tables: ReadonlySet<string>) => void): () => void;
+	/** Runs after every sync settles, failed or not. */
+	onStatus(listener: (status: SyncStatus) => void): () => void;
 	clientId(): string;
 };
+
+const REJECTED_KEPT = 20;
+
+class Unauthorized extends Error {}
 
 type Run =
 	| { kind: 'idle' }
@@ -71,7 +85,10 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	const maxBackoff = options.maxBackoff ?? MAX_BACKOFF_MS;
 	const firstBackoff = Math.min(FIRST_BACKOFF_MS, maxBackoff);
 	const listeners = new Set<(tables: ReadonlySet<string>) => void>();
+	const statusListeners = new Set<(status: SyncStatus) => void>();
 	let migrated = false;
+	let unauthorized = false;
+	let rejected: Rejected[] = [];
 	let run: Run = { kind: 'idle' };
 	let lastError: string | null = null;
 	let dirty: ReturnType<typeof setTimeout> | null = null;
@@ -85,7 +102,9 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	const ready = () => {
 		if (!migrated) throw new Error('call migrate() before using the sync client');
 	};
-	const background = () => void sync().catch(() => {});
+	const background = () => {
+		if (!unauthorized) void serialized().catch(() => {});
+	};
 
 	async function post(writes: Write[]): Promise<SyncResponse> {
 		const progress = core.snapshot();
@@ -105,6 +124,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			},
 			body: JSON.stringify(request),
 		});
+		if (reply.status === 401) throw new Unauthorized(`sync failed with 401: ${await reply.text()}`);
 		if (!reply.ok) throw new Error(`sync failed with ${reply.status}: ${await reply.text()}`);
 		return (await reply.json()) as SyncResponse;
 	}
@@ -115,6 +135,8 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			let response: SyncResponse;
 			do {
 				response = await post(batch.writes);
+				if (response.rejected.length)
+					rejected = [...response.rejected.toReversed(), ...rejected].slice(0, REJECTED_KEPT);
 				for (const table of core.apply(response, batch.acked)) touched.add(table);
 				batch = { writes: [], acked: 0 };
 				snapshotRows = core.snapshot() ? snapshotRows + response.rows.length : 0;
@@ -123,8 +145,15 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			return response;
 		} catch (error) {
 			lastError = error instanceof Error ? error.message : String(error);
+			if (error instanceof Unauthorized) unauthorized = true;
 			throw error;
 		}
+	}
+
+	function announce() {
+		if (!statusListeners.size) return;
+		const current = status();
+		for (const listener of statusListeners) listener(current);
 	}
 
 	async function begin(): Promise<SyncResponse> {
@@ -146,7 +175,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			}
 			return response;
 		} catch (error) {
-			if (live && !retry) {
+			if (live && !retry && !unauthorized) {
 				retry = setTimeout(() => {
 					retry = null;
 					background();
@@ -156,6 +185,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			throw error;
 		} finally {
 			settle();
+			announce();
 		}
 	}
 
@@ -165,6 +195,11 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	}
 
 	function sync(): Promise<SyncResponse> {
+		unauthorized = false;
+		return serialized();
+	}
+
+	function serialized(): Promise<SyncResponse> {
 		ready();
 		switch (run.kind) {
 			case 'idle':
@@ -258,6 +293,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 		start() {
 			ready();
 			if (live) return;
+			unauthorized = false;
 			const state: Live = {
 				socket: null,
 				heard: true,
@@ -294,24 +330,32 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 				background();
 			}, DIRTY_MS);
 		},
-		status() {
-			ready();
-			return {
-				live: live?.socket?.readyState === Socket.OPEN,
-				syncing: run.kind !== 'idle',
-				pending: core.pending(),
-				cursor: core.cursor(),
-				lastError,
-				snapshot: core.snapshot() ? { rows: snapshotRows } : null,
-			};
-		},
+		status,
 		onChange(listener) {
 			listeners.add(listener);
 			return () => void listeners.delete(listener);
+		},
+		onStatus(listener) {
+			statusListeners.add(listener);
+			return () => void statusListeners.delete(listener);
 		},
 		clientId() {
 			ready();
 			return core.clientId();
 		},
 	};
+
+	function status(): SyncStatus {
+		ready();
+		return {
+			live: live?.socket?.readyState === Socket.OPEN,
+			syncing: run.kind !== 'idle',
+			pending: core.pending(),
+			cursor: core.cursor(),
+			lastError,
+			snapshot: core.snapshot() ? { rows: snapshotRows } : null,
+			unauthorized,
+			rejected,
+		};
+	}
 }

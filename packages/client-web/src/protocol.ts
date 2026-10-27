@@ -34,11 +34,14 @@ export type Reply<K extends Kind = Kind> = K extends Kind
 	? { id: number; kind: K; ok: true; result: Output<K> } | { id: number; kind: K; ok: false; error: Failure }
 	: never;
 export type Change = { kind: 'change'; tables: string[] };
-export type ToTab = Reply | Change;
+/** The host's sync status after each sync settles, for every tab. */
+export type StatusChange = { kind: 'sync-status'; status: SyncStatus };
+export type ToTab = Reply | Change | StatusChange;
 export type Bus =
 	| { kind: 'call'; from: string; call: Call<HostKind> }
 	| { kind: 'reply'; to: string; reply: Reply }
 	| Change
+	| StatusChange
 	| { kind: 'host' }
 	| { kind: 'hello' }
 	| { kind: 'token'; token: string | null | undefined };

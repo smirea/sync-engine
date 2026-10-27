@@ -21,6 +21,8 @@ export type SyncWorkerOptions = {
 	filename: string;
 	/** `undefined` starts the loop without auth, a string starts it with the token, `null` waits for `setToken`. */
 	token?: string | null;
+	/** Sent with every sync request, such as an app's own client header. */
+	headers?: Record<string, string>;
 	interval?: number;
 	maxBackoff?: number;
 	/** Where `sqlite3.wasm` is served from, when the bundler does not resolve it next to the worker script. */
@@ -146,12 +148,18 @@ export function startSyncWorker(options: SyncWorkerOptions): void {
 			schema: options.schema,
 			endpoint: options.endpoint,
 			token: token ?? undefined,
+			headers: options.headers,
 			interval: options.interval,
 			maxBackoff: options.maxBackoff,
 		};
 		const client = createSyncClient(clientOptions);
 		client.migrate();
 		client.onChange(tables => notify([...tables]));
+		client.onStatus(status => {
+			const change = { kind: 'sync-status', status } satisfies Bus;
+			scope.postMessage(change);
+			bus.postMessage(change);
+		});
 		const host: Host = { kind: 'host', sqlite3, db, client, clientOptions, started: false, touched };
 		if (token !== null) {
 			client.start();
@@ -315,6 +323,7 @@ export function startSyncWorker(options: SyncWorkerOptions): void {
 				return;
 			}
 			case 'change':
+			case 'sync-status':
 				scope.postMessage(data);
 				return;
 			case 'host':

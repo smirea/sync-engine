@@ -17,7 +17,12 @@ export const SyncRequestSchema = z.discriminatedUnion('protocol', [
 	z.object({ protocol: z.literal(2), ...body, after: z.object({ table: z.string(), id: z.string() }).optional() }),
 ]);
 
-export async function handleSync(space: Space, request: Request): Promise<Response> {
+/** `context` reaches the space's hooks; an app without hooks passes nothing. */
+export async function handleSync<C = void>(
+	space: Space<C>,
+	request: Request,
+	...context: C extends void ? [] : [C]
+): Promise<Response> {
 	let body: unknown;
 	try {
 		body = await request.json();
@@ -35,7 +40,7 @@ export async function handleSync(space: Space, request: Request): Promise<Respon
 	const parsed = SyncRequestSchema.safeParse(body);
 	if (!parsed.success) return Response.json({ error: z.prettifyError(parsed.error) }, { status: 400 });
 	const typed: SyncRequest = parsed.data;
-	return Response.json(space.sync(typed));
+	return Response.json(space.sync(typed, context[0] as C));
 }
 
 export const LIVE_PROTOCOL = 'sync-engine.v1';

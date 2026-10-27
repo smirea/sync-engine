@@ -97,6 +97,8 @@ describe('createSyncClient over HTTP', () => {
 			cursor: 2,
 			lastError: null,
 			snapshot: null,
+			unauthorized: false,
+			rejected: [],
 		});
 
 		await b.client.sync();
@@ -154,6 +156,8 @@ describe('createSyncClient over HTTP', () => {
 			cursor: 5,
 			lastError: null,
 			snapshot: null,
+			unauthorized: false,
+			rejected: [],
 		});
 	});
 
@@ -257,12 +261,64 @@ describe('createSyncClient over HTTP', () => {
 			cursor: 0,
 			lastError: 'sync failed with 401: unauthorized',
 			snapshot: null,
+			unauthorized: true,
+			rejected: [],
 		});
 
 		const right = peer(endpoint, { token: 'secret' });
 		insert(right.db, 'n2', 'sent');
 		expect((await right.client.sync()).acked).toBe(1);
 		expect(right.client.status().pending).toBe(0);
+	});
+
+	test('after a 401 nothing syncs on its own until start or sync', async () => {
+		let requests = 0;
+		const statuses: SyncStatus[] = [];
+		const refused = peer('http://127.0.0.1:1', {
+			token: 'expired',
+			maxBackoff: 20,
+			fetch: (async () => {
+				requests++;
+				return new Response('unauthorized', { status: 401 });
+			}) as unknown as typeof fetch,
+			WebSocket: class {
+				static OPEN = 1;
+				readyState = 0;
+				addEventListener() {}
+				close() {}
+			} as unknown as typeof WebSocket,
+		});
+		refused.client.onStatus(status => statuses.push(status));
+		refused.client.start();
+		await until(() => requests > 0);
+		insert(refused.db, 'n1', 'waits');
+		refused.client.markDirty();
+		await Bun.sleep(250);
+		expect(requests).toBe(1);
+		expect(statuses.at(-1)?.unauthorized).toBe(true);
+		await expect(refused.client.sync()).rejects.toThrow('401');
+		expect(requests).toBe(2);
+	});
+
+	test('keeps the writes the server refused, newest first', async () => {
+		const reply = (rejected: SyncResponse['rejected']): SyncResponse => ({
+			head: 0,
+			acked: 2,
+			rejected,
+			snapshot: false,
+			rows: [],
+			next: null,
+		});
+		const answers = [
+			reply([{ seq: 1, table: 'notes', id: 'a', reason: 'first' }]),
+			reply([{ seq: 2, table: 'notes', id: 'b', reason: 'second' }]),
+		];
+		const client = peer('http://127.0.0.1:1', {
+			fetch: (async () => Response.json(answers.shift())) as unknown as typeof fetch,
+		});
+		await client.client.sync();
+		await client.client.sync();
+		expect(client.client.status().rejected.map(r => r.reason)).toEqual(['second', 'first']);
 	});
 
 	test('reconnects after the server restarts and receives the next nudge', async () => {

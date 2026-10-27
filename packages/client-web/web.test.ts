@@ -18,6 +18,7 @@ type Tab = {
 		setToken(token: string | null): Promise<void>;
 	};
 	changes: { tables: string[]; at: number }[];
+	statuses: WebSyncStatus[];
 	now(): number;
 	insert(id: string, title: string): Promise<unknown>;
 	rows(): Promise<Note[]>;
@@ -222,6 +223,7 @@ describe.each(browsers)('%s', (name, browserType) => {
 			expect((await status(a)).live).toBe(false);
 			await a.evaluate(() => window.tab.db.setToken('session'));
 			await until(async () => (await status(a)).live);
+			await until(async () => (await a.evaluate(() => window.tab.statuses.length)) > 0);
 			const b = await open(ctx, '?wait');
 			await status(b);
 			await a.close();
