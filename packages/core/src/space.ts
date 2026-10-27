@@ -81,6 +81,11 @@ export type Space<C = void> = {
 		context: C,
 		options?: { atomic?: boolean },
 	): { rejected: Rejected[]; head: number };
+	/**
+	 * Runs `fn` in one transaction with a writer whose rows count and sync like any other, without the hooks, as the
+	 * client `server`: the app's derived rows outside a sync, such as grants recomputed after a share changes.
+	 */
+	change<T>(fn: (server: ServerWriter) => T): T;
 	/** Drops tombstones and log rows older than `retention`, moves the horizon up to them and returns it. */
 	compact(): number;
 	head(): number;
@@ -240,6 +245,58 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 		return horizon;
 	}
 
+	const touch = (by: string, write: Pick<Write, 'table' | 'id' | 'op'>, deleted: 0 | 1, log: Values | null) => {
+		const seq = meta('head') + 1;
+		setMeta('head', seq);
+		driver.exec(
+			'INSERT INTO _changes ("table", id, seq, deleted) VALUES (?, ?, ?, ?) ON CONFLICT("table", id) DO UPDATE SET seq = excluded.seq, deleted = excluded.deleted',
+			[write.table, write.id, seq, deleted],
+		);
+		driver.exec('INSERT INTO _log (seq, at, client, "table", id, op, "values") VALUES (?, ?, ?, ?, ?, ?, ?)', [
+			seq,
+			now(),
+			by,
+			write.table,
+			write.id,
+			write.op,
+			log && JSON.stringify(log),
+		]);
+	};
+
+	/** Runs a checked write. Answers whether it counted. */
+	const apply = (by: string, table: Table, write: Write): boolean => {
+		switch (write.op) {
+			case 'delete':
+				driver.exec(`DELETE FROM ${table.name} WHERE id = ?`, [write.id]);
+				touch(by, write, 1, null);
+				return true;
+			case 'put':
+				upsert(driver, table.name, write.id, write.values);
+				touch(by, write, 0, write.values);
+				return true;
+			case 'patch': {
+				const names = Object.keys(write.values);
+				if (names.length) {
+					driver.exec(`UPDATE ${table.name} SET ${names.map(n => `${n} = ?`).join(', ')} WHERE id = ?`, [
+						...names.map(n => write.values[n]!),
+						write.id,
+					]);
+				}
+				touch(by, write, 0, write.values);
+				return true;
+			}
+		}
+	};
+
+	const checked = (table: Table, write: Write): Write | string | null => {
+		if (write.op === 'delete') return write;
+		const checked = checkValues(table, write);
+		if ('reason' in checked) return checked.reason;
+		if (write.op === 'patch' && !driver.exec(`SELECT 1 FROM ${table.name} WHERE id = ?`, [write.id]).length)
+			return null;
+		return { ...write, values: checked.values };
+	};
+
 	/**
 	 * Applies writes in the given order as `client` and answers the refusals. The head advances in `_meta` as each write
 	 * counts, so the derived writes of `landed` follow on from it.
@@ -248,86 +305,36 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 		const rejected: Rejected[] = [];
 		const counted: Write[] = [];
 
-		const touch = (by: string, write: Pick<Write, 'table' | 'id' | 'op'>, deleted: 0 | 1, log: Values | null) => {
-			const seq = meta('head') + 1;
-			setMeta('head', seq);
-			driver.exec(
-				'INSERT INTO _changes ("table", id, seq, deleted) VALUES (?, ?, ?, ?) ON CONFLICT("table", id) DO UPDATE SET seq = excluded.seq, deleted = excluded.deleted',
-				[write.table, write.id, seq, deleted],
-			);
-			driver.exec('INSERT INTO _log (seq, at, client, "table", id, op, "values") VALUES (?, ?, ?, ?, ?, ?, ?)', [
-				seq,
-				now(),
-				by,
-				write.table,
-				write.id,
-				write.op,
-				log && JSON.stringify(log),
-			]);
-		};
-
-		/** Runs a checked write. Answers whether it counted. */
-		const run = (by: string, table: Table, write: Write): boolean => {
-			switch (write.op) {
-				case 'delete':
-					driver.exec(`DELETE FROM ${table.name} WHERE id = ?`, [write.id]);
-					touch(by, write, 1, null);
-					return true;
-				case 'put':
-					upsert(driver, table.name, write.id, write.values);
-					touch(by, write, 0, write.values);
-					return true;
-				case 'patch': {
-					const names = Object.keys(write.values);
-					if (names.length) {
-						driver.exec(`UPDATE ${table.name} SET ${names.map(n => `${n} = ?`).join(', ')} WHERE id = ?`, [
-							...names.map(n => write.values[n]!),
-							write.id,
-						]);
-					}
-					touch(by, write, 0, write.values);
-					return true;
-				}
-			}
-		};
-
-		const check = (table: Table, write: Write): Write | string | null => {
-			if (write.op === 'delete') return write;
-			const checked = checkValues(table, write);
-			if ('reason' in checked) return checked.reason;
-			if (write.op === 'patch' && !driver.exec(`SELECT 1 FROM ${table.name} WHERE id = ?`, [write.id]).length)
-				return null;
-			return { ...write, values: checked.values };
-		};
-
 		for (const write of writes) {
 			const table = tables.get(write.table);
-			let outcome: Write | string | null = table ? check(table, write) : `unknown table ${write.table}`;
+			let outcome: Write | string | null = table ? checked(table, write) : `unknown table ${write.table}`;
 			if (outcome !== null && typeof outcome !== 'string' && hooks.admit) outcome = hooks.admit(outcome, context);
 			if (typeof outcome === 'string') {
 				rejected.push({ seq: write.seq, table: write.table, id: write.id, reason: outcome });
 				continue;
 			}
-			if (outcome && run(client, table!, outcome)) counted.push(outcome);
+			if (outcome && apply(client, table!, outcome)) counted.push(outcome);
 		}
 
-		if (counted.length && hooks.landed) {
-			const derived = (op: Write['op'], name: string, id: string, values?: Values) => {
-				const table = tables.get(name);
-				if (!table) throw new Error(`unknown table ${name}`);
-				const write = { seq: 0, table: name, id, op, values: values ?? {} } as Write;
-				const outcome = check(table, write);
-				if (typeof outcome === 'string') throw new Error(`${name} ${id}: ${outcome}`);
-				if (outcome) run(SERVER_CLIENT, table, outcome);
-			};
-			hooks.landed(counted, context, {
-				put: (table, id, values) => derived('put', table, id, values),
-				patch: (table, id, values) => derived('patch', table, id, values),
-				delete: (table, id) => derived('delete', table, id),
-			});
-		}
+		if (counted.length && hooks.landed) hooks.landed(counted, context, writer);
 		return rejected;
 	}
+
+	const writer: ServerWriter = (() => {
+		const derived = (op: Write['op'], name: string, id: string, values?: Values) => {
+			const table = tables.get(name);
+			if (!table) throw new Error(`unknown table ${name}`);
+			const write = { seq: 0, table: name, id, op, values: values ?? {} } as Write;
+			const outcome = checked(table, write);
+			if (typeof outcome === 'string') throw new Error(`${name} ${id}: ${outcome}`);
+			if (outcome) apply(SERVER_CLIENT, table, outcome);
+		};
+		return {
+			put: (table, id, values) => derived('put', table, id, values),
+			patch: (table, id, values) => derived('patch', table, id, values),
+			delete: (table, id) => derived('delete', table, id),
+		};
+	})();
 
 	function sync(request: SyncRequest, context: C): SyncResponse {
 		return driver.transaction(() => {
@@ -393,6 +400,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 		},
 		sync,
 		write,
+		change: fn => driver.transaction(() => fn(writer)),
 		compact: () => driver.transaction(compactNow),
 		head: () => meta('head'),
 		dump: () =>

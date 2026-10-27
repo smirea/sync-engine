@@ -188,3 +188,18 @@ describe('write', () => {
 		expect(driver.exec('SELECT id FROM notes')).toEqual([]);
 	});
 });
+
+describe('change', () => {
+	test('server rows written outside a sync count and reach readers', () => {
+		const { space, sync } = setup({});
+		const head = space.change(server => {
+			server.put('notes', 'a', { owner: 'ann', title: 'derived' });
+			return space.head();
+		});
+		expect(head).toBe(1);
+		expect(ids(sync('bob', []).rows)).toEqual(['notes:a:0']);
+		expect(() => space.change(server => server.put('notes', 'b', { owner: 'ann' }))).toThrow(
+			'notes b: title: required',
+		);
+	});
+});
