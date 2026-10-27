@@ -12,6 +12,19 @@ const STORAGE: Record<string, StorageClass> = {
 	SQLiteReal: 'REAL',
 };
 const NAME = /^[a-z_][a-z0-9_]*$/;
+/**
+ * SQLite's keywords. The DDL, the triggers and the upserts write names unquoted on every client, so a keyword such as
+ * `order` would fail only once a database runs the statement; it fails here, when the schema is defined.
+ */
+const KEYWORDS = new Set(
+	'abort action add after all alter always analyze and as asc attach autoincrement before begin between by cascade case cast check collate column commit conflict constraint create cross current current_date current_time current_timestamp database default deferrable deferred delete desc detach distinct do drop each else end escape except exclude exclusive exists explain fail filter first following for foreign from full generated glob group groups having if ignore immediate in index indexed initially inner insert instead intersect into is isnull join key last left like limit match materialized natural no not nothing notnull null nulls of offset on or order others outer over partition plan pragma preceding primary query raise range recursive references regexp reindex release rename replace restrict returning right rollback row rows savepoint select set table temp temporary then ties to transaction trigger unbounded union unique update using vacuum values view virtual when where window with without'.split(
+		' ',
+	),
+);
+const checkName = (where: string, name: string) => {
+	if (!NAME.test(name)) throw new Error(`${where}: name ${name} must match ${NAME}`);
+	if (KEYWORDS.has(name)) throw new Error(`${where}: ${name} is an SQLite keyword, which the engine never quotes`);
+};
 
 type DrizzleColumn = { name: string; columnType: string; notNull: boolean; primary: boolean; default: unknown };
 type Tables = Record<string, SQLiteTable>;
@@ -28,7 +41,7 @@ function plainDefault(where: string, raw: unknown, json: boolean): Value | undef
 
 function toColumn(table: string, key: string, column: DrizzleColumn, validate: ZodType | undefined): Column {
 	const where = `${table}.${key}`;
-	if (!NAME.test(column.name)) throw new Error(`${where}: column name ${column.name} must match ${NAME}`);
+	checkName(where, column.name);
 	const type = STORAGE[column.columnType];
 	if (!type)
 		throw new Error(`${where}: ${column.columnType} has no SQLite storage class here (use text, integer or real)`);
@@ -42,7 +55,7 @@ function toColumn(table: string, key: string, column: DrizzleColumn, validate: Z
 
 function toTable(table: SQLiteTable, validators: Record<string, ZodType | undefined>): Table {
 	const name = getTableName(table);
-	if (!NAME.test(name)) throw new Error(`table name ${name} must match ${NAME}`);
+	checkName(`table ${name}`, name);
 	const entries = Object.entries(getTableColumns(table) as Record<string, DrizzleColumn>);
 	for (const key of Object.keys(validators)) {
 		if (!entries.some(([k]) => k === key)) throw new Error(`${name}.${key}: values names a column the table lacks`);
