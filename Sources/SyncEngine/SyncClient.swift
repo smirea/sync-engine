@@ -441,10 +441,22 @@ public final class SyncClient {
 
 extension URLSessionWebSocketTask {
     func ping() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            sendPing { error in
-                if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+        try await firstAnswer(to: sendPing)
+    }
+}
+
+/// URLSession can call a ping's handler a second time, with ECONNABORTED, when the connection aborts around the pong,
+/// and resuming a continuation twice traps (PROCRASTIMATE-IOS-A). Only the first answer counts.
+func firstAnswer(to send: (@escaping @Sendable ((any Error)?) -> Void) -> Void) async throws {
+    let answered = OSAllocatedUnfairLock(initialState: false)
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+        send { error in
+            let first = answered.withLock { answered in
+                defer { answered = true }
+                return !answered
             }
+            guard first else { return }
+            if let error { continuation.resume(throwing: error) } else { continuation.resume() }
         }
     }
 }
