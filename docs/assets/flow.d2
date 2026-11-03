@@ -1,0 +1,27 @@
+direction: right
+vars: {d2-config: {theme-id: 0; pad: 30}}
+classes: {box: {style: {border-radius: 10; font-size: 17; stroke-width: 2}}}
+
+schema: "schema.ts\none schema → DDL, validators, Swift types" {class: box; style.fill: "#fde68a"; style.stroke: "#b45309"}
+
+clients: "Clients · full local SQLite, works offline" {
+  direction: down
+  style: {fill: "#e0f2fe"; stroke: "#0369a1"; border-radius: 14; font-size: 18}
+  apps: "Web (sqlite-wasm, OPFS)\niOS / macOS (GRDB)" {class: box}
+  outbox: "_outbox\nput · patch · delete" {class: box; shape: queue}
+  apps -> outbox: "app writes locally"
+}
+
+server: "Server · one SQLite per space" {
+  direction: down
+  style: {fill: "#dcfce7"; stroke: "#15803d"; border-radius: 14; font-size: 18}
+  host: "Durable Object or Bun\nserialized, column-level LWW" {class: box}
+  db: "mirror · _changes · _log" {class: box; shape: cylinder}
+  host -> db
+}
+
+schema -> clients: generates
+schema -> server: generates
+clients.outbox -> server.host: "1 · POST /sync\n{clientId, cursor, writes}" {style: {stroke-width: 3; stroke: "#0f172a"}}
+server.host -> clients.apps: "2 · rows since cursor\n(or paged snapshot)" {style: {stroke-width: 3; stroke: "#15803d"}}
+server.host -> clients.outbox: "WebSocket nudge" {style: {stroke-dash: 5; stroke: "#64748b"}}
