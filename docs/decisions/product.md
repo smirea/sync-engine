@@ -6,3 +6,5 @@
 - **One schema, every runtime.** A TypeScript schema file produces the SQLite DDL for client and server, the validators, and the Swift types, so an agent changes one file and a failing check names any stale output. No backwards compatibility: clients re-pull when the schema changes shape.
 - **Few dependencies.** The engine core is plain TypeScript over a small SQL driver interface. Clients use the platform's SQLite (sqlite-wasm on the web, GRDB on Apple platforms).
 - The investigation that produced these goals is in [`docs/investigation/README.md`](../investigation/README.md).
+
+- **Project icon.** The mirrored-flow mark in [`docs/assets/icon.svg`](../assets/icon.svg) represents two-way sync. It uses a-better-me’s icon blue (`#0649DC`) on a transparent background and is also the T3 Code project icon.
