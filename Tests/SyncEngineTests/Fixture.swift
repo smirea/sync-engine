@@ -206,14 +206,21 @@ final class BunServer {
 }
 
 /// Forwards every request to the real server, recording its body and the reply and first awaiting `before` with its index, so a
-/// test can write between two pages or fail one with a thrown `URLError`.
+/// test can write between two pages or fail one with a thrown `URLError`. `older` plays a server from before spaces: it drops the
+/// request's `space`, as an unknown key, and sends none back.
 final class Relay: URLProtocol {
     typealias Before = @Sendable (Int) async throws -> Void
 
-    static let state = Mutex<(bodies: [Data], replies: [Data], before: Before)>(([], [], { _ in }))
+    static let state = Mutex<(bodies: [Data], replies: [Data], before: Before, older: Bool)>(([], [], { _ in }, false))
 
-    static func reset(before: @escaping Before = { _ in }) {
-        state.withLock { $0 = ([], [], before) }
+    static func reset(before: @escaping Before = { _ in }, older: Bool = false) {
+        state.withLock { $0 = ([], [], before, older) }
+    }
+
+    private static func withoutSpace(_ data: Data) throws -> Data {
+        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return data }
+        object["space"] = nil
+        return try JSONSerialization.data(withJSONObject: object)
     }
 
     static var requests: [SyncRequest] {
@@ -238,17 +245,19 @@ final class Relay: URLProtocol {
 
     override func startLoading() {
         let body = request.streamedBody
-        let forwarded = { var forwarded = request; forwarded.httpBody = body; return forwarded }()
-        let (index, before) = Self.state.withLock { state in
+        let (index, before, older) = Self.state.withLock { state in
             state.bodies.append(body)
-            return (state.bodies.count - 1, state.before)
+            return (state.bodies.count - 1, state.before, state.older)
         }
+        let sent = older ? ((try? Self.withoutSpace(body)) ?? body) : body
+        let forwarded = { var forwarded = request; forwarded.httpBody = sent; return forwarded }()
         // URLProtocol is not Sendable, but URL loading takes its client callbacks from any thread.
         nonisolated(unsafe) let relay = self
         Task {
             do {
                 try await before(index)
-                let (data, response) = try await URLSession.shared.data(for: forwarded)
+                let (answered, response) = try await URLSession.shared.data(for: forwarded)
+                let data = older ? try Self.withoutSpace(answered) : answered
                 Self.state.withLock { $0.replies.append(data) }
                 relay.client?.urlProtocol(relay, didReceive: response, cacheStoragePolicy: .notAllowed)
                 relay.client?.urlProtocol(relay, didLoad: data)

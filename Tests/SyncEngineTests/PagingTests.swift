@@ -41,6 +41,27 @@ final class PagingTests: XCTestCase {
         try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('cursor', 'after', 'snapshot_head') ORDER BY key")
     }
 
+    func testAServerOlderThanSpacesKeepsTheClientInDeltasAfterItsFirstSnapshot() async throws {
+        let server = try BunServer()
+        try await Self.other(server, [Self.put(1, "notes", "n1")])
+        Relay.reset(older: true)
+        let (client, pool) = try client(server)
+
+        await client.sync()
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n2', 'MINE')")
+        await client.sync()
+        try await Self.other(server, [Self.put(2, "notes", "n3")])
+        await client.sync()
+        await client.sync()
+
+        XCTAssertEqual(try Relay.requests.map(\.space), ["", "", "", ""])
+        XCTAssertEqual(try Relay.responses.map(\.space), [nil, nil, nil, nil])
+        XCTAssertEqual(try Relay.responses.map(\.snapshot), [true, false, false, false])
+        XCTAssertEqual(try rows(pool), ["notes/n1:N1", "notes/n2:MINE", "notes/n3:N3"])
+        XCTAssertEqual(try pool.strings("SELECT value FROM _meta WHERE key = 'space'"), [])
+        XCTAssertEqual(try meta(pool), ["cursor=3"])
+    }
+
     func testTheEchoOfAPushedWriteCommitsNothingLocally() async throws {
         let server = try BunServer()
         try await Self.other(server, [Self.put(1, "tags", "t1")])

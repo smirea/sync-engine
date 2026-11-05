@@ -79,6 +79,39 @@ const insert = (db: SqlDriver, id: string, title: string) =>
 	db.exec('INSERT INTO notes (id, title) VALUES (?, ?)', [id, title]);
 
 describe('createSyncClient over HTTP', () => {
+	test('a server older than spaces keeps a client in deltas after its first snapshot', async () => {
+		const { endpoint } = server();
+		const responses: SyncResponse[] = [];
+		// A server from before spaces drops the request's `space` as an unknown key and never sends one.
+		const older = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			const { space: _sent, ...request } = JSON.parse(String(init!.body));
+			const reply = await fetch(input, { ...init, body: JSON.stringify(request) });
+			const { space: _answered, ...response } = (await reply.json()) as SyncResponse;
+			responses.push(response);
+			return Response.json(response, { status: reply.status });
+		}) as typeof fetch;
+		const a = peer(endpoint, { fetch: older });
+		const b = peer(endpoint, { fetch: older });
+
+		insert(a.db, 'n1', 'one');
+		await a.client.sync();
+		await b.client.sync();
+		insert(b.db, 'n2', 'two');
+		await b.client.sync();
+		a.db.exec("UPDATE notes SET title = 'edited' WHERE id = 'n1'");
+		await a.client.sync();
+		await b.client.sync();
+		await b.client.sync();
+
+		expect(responses.map(response => response.snapshot)).toEqual([true, true, false, false, false, false]);
+		expect(b.rows().map(row => [row.id, row.title])).toEqual([
+			['n1', 'edited'],
+			['n2', 'two'],
+		]);
+		expect(b.db.exec("SELECT value FROM _meta WHERE key = 'space'")).toEqual([]);
+		expect(b.client.status().cursor).toBe(3);
+	});
+
 	test('two clients converge through one server', async () => {
 		const { endpoint, dump } = server();
 		const a = peer(endpoint);
