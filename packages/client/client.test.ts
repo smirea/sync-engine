@@ -225,6 +225,7 @@ describe('createSyncClient over HTTP', () => {
 		expect(a.client.status().syncing).toBe(true);
 
 		expect(await first).toEqual({
+			space: expect.any(String),
 			head: 1,
 			acked: 1,
 			rejected: [],
@@ -233,6 +234,7 @@ describe('createSyncClient over HTTP', () => {
 			next: null,
 		});
 		const queued: SyncResponse = {
+			space: (await first).space,
 			head: 2,
 			acked: 2,
 			rejected: [],

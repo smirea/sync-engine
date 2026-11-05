@@ -24,7 +24,7 @@ final class PagingTests: XCTestCase {
 
     @discardableResult
     private static func other(_ server: BunServer, _ writes: [SyncWrite] = []) async throws -> SyncResponse {
-        try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: writes, after: nil), to: server.url)
+        try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: writes, after: nil, space: ""), to: server.url)
     }
 
     private static let seven = ["n1", "n2", "n3", "n4", "n5"].enumerated().map { put($0.offset + 1, "notes", $0.element) } + [put(6, "tags", "t1"), put(7, "tags", "t2")]
@@ -123,7 +123,7 @@ final class PagingTests: XCTestCase {
         let url = server.url
         Relay.reset { index in
             guard index == 1 else { return }
-            _ = try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: [SyncWrite(seq: 8, table: "notes", id: "n1", op: .patch, values: ["title": .string("EDITED")])], after: nil), to: url)
+            _ = try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: [SyncWrite(seq: 8, table: "notes", id: "n1", op: .patch, values: ["title": .string("EDITED")])], after: nil, space: ""), to: url)
         }
 
         await client.sync()

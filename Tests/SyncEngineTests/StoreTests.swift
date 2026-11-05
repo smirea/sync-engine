@@ -57,6 +57,27 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(try pool.outbox(), [])
     }
 
+    func testAResponseFromAnotherSpaceWipesLikeAFirstPageEvenMidSnapshot() throws {
+        let (pool, store) = try Fixture.migratedPool()
+        try pool.write { try store.apply(Fixture.response(head: 7, snapshot: true, rows: [Fixture.note("old1", title: "a")], space: "old"), $0) }
+        XCTAssertEqual(try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('cursor', 'space') ORDER BY key"), ["cursor=7", "space=old"])
+        try pool.write { try store.apply(Fixture.response(head: 9, snapshot: true, rows: [Fixture.note("old2", title: "b")], next: After(table: "notes", id: "old2"), space: "old"), $0) }
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('mine', 'offline')")
+
+        try pool.write { try store.apply(Fixture.response(head: 3, snapshot: true, rows: [Fixture.note("new1", title: "c")], space: "new"), $0) }
+
+        XCTAssertEqual(try pool.strings("SELECT id FROM notes ORDER BY id"), ["mine", "new1"])
+        XCTAssertEqual(try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('after', 'cursor', 'snapshot_head', 'space') ORDER BY key"), ["cursor=3", "space=new"])
+    }
+
+    func testAResponseWithoutASpaceLeavesTheStoredOneAlone() throws {
+        let (pool, store) = try Fixture.migratedPool()
+        try pool.write { try store.apply(Fixture.response(head: 2, snapshot: true, rows: [Fixture.note("n1", title: "a")], space: "s"), $0) }
+        try pool.write { try store.apply(Fixture.response(head: 3, rows: [Fixture.note("n2", title: "b")]), $0) }
+        XCTAssertEqual(try pool.strings("SELECT id FROM notes ORDER BY id"), ["n1", "n2"])
+        XCTAssertEqual(try pool.strings("SELECT value FROM _meta WHERE key = 'space'"), ["s"])
+    }
+
     func testASnapshotKeepsRowsWithPendingWrites() throws {
         let (pool, store) = try Fixture.migratedPool()
         try pool.write { try store.apply(Fixture.response(head: 1, rows: [Fixture.note("n1", title: "server"), Fixture.note("n2", title: "stale")]), $0) }

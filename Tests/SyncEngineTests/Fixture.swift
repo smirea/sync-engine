@@ -59,8 +59,8 @@ enum Fixture {
         PulledRow(table: table, id: id, deleted: 1, values: nil)
     }
 
-    static func response(head: Int, acked: Int = 0, snapshot: Bool = false, rows: [PulledRow] = [], rejected: [RejectedWrite] = [], next: After? = nil) -> SyncResponse {
-        SyncResponse(head: head, acked: acked, rejected: rejected, snapshot: snapshot, rows: rows, next: next)
+    static func response(head: Int, acked: Int = 0, snapshot: Bool = false, rows: [PulledRow] = [], rejected: [RejectedWrite] = [], next: After? = nil, space: String? = nil) -> SyncResponse {
+        SyncResponse(head: head, acked: acked, rejected: rejected, snapshot: snapshot, rows: rows, next: next, space: space)
     }
 }
 

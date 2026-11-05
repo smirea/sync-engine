@@ -28,6 +28,7 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(request.protocol, 2)
         XCTAssertEqual(request.client, clientID)
         XCTAssertEqual(request.cursor, 0)
+        XCTAssertEqual(request.space, "")
         XCTAssertEqual(request.writes, [SyncWrite(seq: 1, table: "notes", id: "n1", op: .put, values: ["title": .string("Hi"), "body": .null, "stars": .integer(2)])])
         XCTAssertEqual(client.status, .idle)
         XCTAssertEqual(client.head, 5)
