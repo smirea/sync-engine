@@ -34,6 +34,7 @@ function syncPages(server: Space, client: Client, batch = client.collect()): Syn
 			cursor: client.cursor(),
 			writes: batch.writes,
 			...(progress ? { after: progress.after } : {}),
+			space: client.space(),
 		});
 		client.apply(response, batch.acked);
 		batch = { writes: [], acked: 0 };
@@ -467,6 +468,7 @@ describe('protocol 2', () => {
 		expect(b.client.cursor()).toBe(2);
 		const response = b.sync();
 		expect(response).toEqual({
+			space: server.space(),
 			head: 4,
 			acked: 0,
 			rejected: [],
@@ -494,6 +496,7 @@ describe('protocol 2', () => {
 			server.sync({ protocol: 2, client: b.client.clientId(), cursor: 0, writes: [], ...(after ? { after } : {}) });
 		const page1 = request();
 		expect(page1).toEqual({
+			space: server.space(),
 			head: 7,
 			acked: 0,
 			rejected: [],
@@ -620,5 +623,129 @@ describe('reset', () => {
 		expect(a.client.clientId()).not.toBe(before);
 		a.pull();
 		expect(a.rows().map(row => row.id)).toEqual(['n1']);
+	});
+});
+
+/** A device that synced with `old` and is now pointed at `fresh`, a space that never saw its rows. */
+function moved(oldNotes: string[], freshNotes: string[], options: SpaceOptions = {}) {
+	const old = setup(schema, options);
+	const fresh = setup(schema, options);
+	for (const [index, id] of oldNotes.entries()) insert(old.a, id, `old ${index}`);
+	old.a.sync();
+	for (const [index, id] of freshNotes.entries()) insert(fresh.b, id, `fresh ${index}`);
+	fresh.b.sync();
+	const device = old.a;
+	return { device, fresh, sync: () => syncPages(fresh.server, device.client) };
+}
+
+describe('space identity', () => {
+	test('every space mints its own id, kept across migrations and sent on every protocol 2 response', () => {
+		const { server, serverDb, a } = setup();
+		const id = server.space();
+		expect(id).toMatch(/^[0-9a-f-]{36}$/);
+		server.migrate();
+		expect(server.space()).toBe(id);
+		expect(setup().server.space()).not.toBe(id);
+		expect(a.pull().space).toBe(id);
+		expect(a.client.space()).toBe(id);
+		expect(serverDb.exec("SELECT value FROM _meta WHERE key = 'space'")).toEqual([{ value: id }]);
+	});
+
+	test('a cursor from another space below this head gets a snapshot, and the device ends with exactly this space', () => {
+		const { device, fresh, sync } = moved(['o1'], ['f1', 'f2', 'f3']);
+		expect(device.client.cursor()).toBe(1);
+		expect(fresh.server.head()).toBe(3);
+		insert(device, 'mine', 'written offline');
+
+		const response = sync();
+		expect(response.snapshot).toBe(true);
+		expect(device.rows().map(r => [r.id, r.title])).toEqual([
+			['f1', 'fresh 0'],
+			['f2', 'fresh 1'],
+			['f3', 'fresh 2'],
+			['mine', 'written offline'],
+		]);
+		expect(device.client.space()).toBe(fresh.server.space());
+		expect(device.client.cursor()).toBe(4);
+		expect(fresh.server.dump().notes!.map(r => r.id)).toEqual(['f1', 'f2', 'f3', 'mine']);
+		expect(sync().snapshot).toBe(false);
+	});
+
+	test('a client older than spaces gets a snapshot for a cursor past the head, which only another space issues', () => {
+		const { device, fresh } = moved(['o1', 'o2', 'o3', 'o4'], ['f1']);
+		const request = (cursor: number) =>
+			fresh.server.sync({ protocol: 2, client: device.client.clientId(), cursor, writes: [] });
+		expect(request(4)).toMatchObject({ head: 1, snapshot: true, rows: [{ id: 'f1' }] });
+		expect(request(1)).toMatchObject({ head: 1, snapshot: false, rows: [] });
+		expect(fresh.server.sync({ protocol: 1, client: device.client.clientId(), cursor: 4, writes: [] })).toMatchObject({
+			snapshot: true,
+			rows: [{ id: 'f1' }],
+		});
+	});
+
+	test('a paged snapshot interrupted by a space change restarts from the first page and wipes', () => {
+		const { device, fresh } = moved([], ['f1', 'f2', 'f3'], { pageSize: 2 });
+		const old = setup(schema, { pageSize: 2 });
+		for (const id of ['o1', 'o2', 'o3']) insert(old.a, id, id);
+		old.a.sync();
+		const first = old.server.sync({ protocol: 2, client: device.client.clientId(), cursor: 0, writes: [], space: '' });
+		device.client.apply(first, 0);
+		expect(device.client.snapshot()).toEqual({ after: { table: 'notes', id: 'o2' }, head: 3 });
+
+		const page = fresh.server.sync({
+			protocol: 2,
+			client: device.client.clientId(),
+			cursor: device.client.cursor(),
+			writes: [],
+			after: device.client.snapshot()!.after,
+			space: device.client.space(),
+		});
+		expect(page.rows.map(r => r.id)).toEqual(['f1', 'f2']);
+		device.client.apply(page, 0);
+		syncPages(fresh.server, device.client, { writes: [], acked: 0 });
+		expect(device.rows().map(r => r.id)).toEqual(['f1', 'f2', 'f3']);
+		expect(device.client.cursor()).toBe(3);
+	});
+
+	test('a cursor past the head finishes a paged snapshot, with a space or without one', () => {
+		for (const sendsSpace of [true, false]) {
+			const { device, fresh } = moved(['o1', 'o2', 'o3', 'o4', 'o5'], ['f1', 'f2', 'f3'], { pageSize: 2 });
+			expect(device.client.cursor()).toBeGreaterThan(fresh.server.head());
+			const pages: string[][] = [];
+			do {
+				const progress = device.client.snapshot();
+				const page = fresh.server.sync({
+					protocol: 2,
+					client: device.client.clientId(),
+					cursor: device.client.cursor(),
+					writes: [],
+					...(progress ? { after: progress.after } : {}),
+					...(sendsSpace ? { space: device.client.space() } : {}),
+				});
+				device.client.apply(page, 0);
+				pages.push(page.rows.map(r => r.id));
+			} while (device.client.snapshot() && pages.length < 5);
+			expect(pages).toEqual([['f1', 'f2'], ['f3']]);
+			expect(device.rows().map(r => r.id)).toEqual(['f1', 'f2', 'f3']);
+			expect(device.client.cursor()).toBe(3);
+		}
+	});
+
+	test('a response from a server older than spaces leaves the stored space alone', () => {
+		const { a, server } = setup();
+		a.pull();
+		const id = a.client.space();
+		insert(a, 'n1', 'one');
+		const batch = a.client.collect();
+		const { space: _, ...older } = server.sync({
+			protocol: 2,
+			client: a.client.clientId(),
+			cursor: a.client.cursor(),
+			writes: batch.writes,
+			space: id,
+		});
+		a.client.apply(older, batch.acked);
+		expect(a.client.space()).toBe(id);
+		expect(a.rows().map(r => r.id)).toEqual(['n1']);
 	});
 });

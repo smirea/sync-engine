@@ -20,7 +20,15 @@ export type Write =
 export type After = { table: string; id: string };
 export type SyncRequest =
 	| { protocol: 1; client: string; cursor: number; writes: Write[] }
-	| { protocol: 2; client: string; cursor: number; writes: Write[]; after?: After };
+	| {
+			protocol: 2;
+			client: string;
+			cursor: number;
+			writes: Write[];
+			after?: After;
+			/** The space the cursor came from, `''` when the client has none yet. Left out by clients older than spaces. */
+			space?: string;
+	  };
 export type Rejected = { seq: number; table: string; id: string; reason: string };
 export type PulledRow =
 	| { table: string; id: string; deleted: 0; values: Values }
@@ -33,6 +41,8 @@ export type SyncResponse = {
 	rows: PulledRow[];
 	/** Protocol 2 only: where the next snapshot page starts, null on the last page and on every delta. */
 	next?: After | null;
+	/** The id this space minted when it was created. Servers older than spaces leave it out. */
+	space?: string;
 };
 
 export type StorageClass = 'TEXT' | 'INTEGER' | 'REAL';

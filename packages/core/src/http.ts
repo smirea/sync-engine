@@ -14,7 +14,12 @@ const WriteSchema = z.discriminatedUnion('op', [
 const body = { client: z.string().min(1), cursor: z.int().nonnegative(), writes: z.array(WriteSchema) };
 export const SyncRequestSchema = z.discriminatedUnion('protocol', [
 	z.object({ protocol: z.literal(1), ...body }),
-	z.object({ protocol: z.literal(2), ...body, after: z.object({ table: z.string(), id: z.string() }).optional() }),
+	z.object({
+		protocol: z.literal(2),
+		...body,
+		after: z.object({ table: z.string(), id: z.string() }).optional(),
+		space: z.string().optional(),
+	}),
 ]);
 
 /** `context` reaches the space's hooks; an app without hooks passes nothing. */

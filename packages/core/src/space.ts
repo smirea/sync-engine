@@ -72,6 +72,8 @@ export type SpaceOptions<C = void> = {
 export type Space<C = void> = {
 	migrate(): void;
 	sync(request: SyncRequest, context: C): SyncResponse;
+	/** The id minted when the space was created, which every protocol 2 response carries. */
+	space(): string;
 	/**
 	 * Applies the server's own writes through the hooks, as the client `server`, in one transaction. With `atomic`, one
 	 * refusal rolls the whole call back and nothing applies. Answers the refusals and the head after the call.
@@ -169,6 +171,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 		return Number(row.value);
 	};
 	const setMeta = (key: string, value: number) => driver.exec('UPDATE _meta SET value = ? WHERE key = ?', [value, key]);
+	const spaceId = () => String(driver.exec("SELECT value FROM _meta WHERE key = 'space'")[0]!.value);
 
 	const live = (table: Table, row: Row): PulledRow => ({
 		table: table.name,
@@ -387,11 +390,20 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 			}
 			const head = meta('head');
 
-			// A cursor below the horizon may have missed tombstones that are gone, so it gets a snapshot like cursor 0.
-			const snapshotting = request.cursor === 0 || request.cursor < meta('horizon');
+			const space = spaceId();
+			// A cursor counts only in the space that issued it, so one from another space would skip rows: it gets a snapshot
+			// like cursor 0, from the first page, since an `after` it carries is another space's too. The client stores this
+			// space with the first page, so its next pages match and advance.
+			const foreign = request.protocol === 2 && request.space !== undefined && request.space !== space;
 			const paged = request.protocol === 2;
+			const after = paged && !foreign ? (request.after ?? null) : null;
+			// A cursor past the head was issued by another space too, for a client that sends no space. The client keeps it
+			// until its snapshot's last page, so its later pages still carry it and must continue from `after`.
+			// A cursor below the horizon may have missed tombstones that are gone, so it gets a snapshot like cursor 0.
+			const snapshotting =
+				foreign || after !== null || request.cursor === 0 || request.cursor > head || request.cursor < meta('horizon');
 			const page = snapshotting
-				? snapshot(paged ? (request.after ?? null) : null, paged ? pageSize : null)
+				? snapshot(after, paged ? pageSize : null)
 				: { rows: delta(request.cursor), next: null };
 			const view = hooks.view?.(context);
 			// A skipped write was acked without landing, so the client gets the server's row back like a refused one.
@@ -402,7 +414,10 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 			);
 			if (view) rows = filtered(view, rows, new Set(repaired.map(r => rowKey(r.table, r.id))));
 			const response: SyncResponse = { head, acked: last, rejected, snapshot: snapshotting, rows };
-			if (paged) response.next = page.next;
+			if (paged) {
+				response.next = page.next;
+				response.space = space;
+			}
 			if (now() - meta('compacted_at') > compactEvery) compactNow();
 			return response;
 		});
@@ -430,7 +445,9 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 		migrate() {
 			migrate(driver, schema, 'server');
 			driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('head', 0), ('horizon', 0), ('compacted_at', 0)");
+			driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('space', ?)", [crypto.randomUUID()]);
 		},
+		space: spaceId,
 		sync,
 		write,
 		change: fn => driver.transaction(() => fn(writer)),

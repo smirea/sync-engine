@@ -173,8 +173,12 @@ public final class SyncClient {
             var collected = try await database.read { try store.collect($0) }
             if !collected.writes.isEmpty, let beforePush { try await beforePush() }
             while true {
-                let (cursor, progress) = try await database.read { db in (try store.cursor(db), try store.snapshot(db)) }
-                let request = SyncRequest(protocol: 2, client: clientID, cursor: cursor, writes: collected.writes, after: progress?.after)
+                let (cursor, progress, space) = try await database.read { db in
+                    (try store.cursor(db), try store.snapshot(db), try store.meta("space", db) ?? "")
+                }
+                let request = SyncRequest(
+                    protocol: 2, client: clientID, cursor: cursor, writes: collected.writes, after: progress?.after, space: space
+                )
                 let response = try await post(request, token: token)
                 if !collected.writes.isEmpty, response.acked > collected.sent {
                     try await adoptNewClientID(acked: response.acked, sent: collected.sent)

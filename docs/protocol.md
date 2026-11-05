@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value);
 - `horizon`: every tombstone with `seq <= horizon` may be gone. A pull from a cursor below it gets a snapshot.
 - `compacted_at`: when compaction last ran, in the server's clock (`Date.now()` milliseconds unless the space was given another clock).
 
+and one text value, also inserted with `INSERT OR IGNORE` on every migrate:
+
+- `space`: a random UUID minted when the space is created and never changed. A cursor means something only in the space that issued it.
+
 `_changes` keeps one row per app row written since the horizon, with `deleted = 1` as a tombstone. A live row's entry is never removed, since delta pulls need it. `_log.at` is the server clock at the write.
 
 ### Compaction
@@ -51,6 +55,7 @@ CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value);
 - `client`: a UUID minted once per install.
 - `cursor`: 0 on a fresh database.
 - `applying`: 1 while pulled rows are being written, else absent or 0.
+- `space`: the `space` of the last response that carried one, absent before the first.
 - `after` and `snapshot_head`: present together only while a paged snapshot is in progress. `after` is the JSON `{"table": ..., "id": ...}` of the last row received, `snapshot_head` the `head` of the snapshot's first page. Both are written and cleared in the same transaction as the rows they describe.
 
 Writes are captured by generated triggers, one set per app table, so no client code can forget to queue a change:
@@ -94,11 +99,12 @@ Each write carries `seq` = the largest outbox `seq` in its group. A `put` or `pa
 		{ "seq": 9, "table": "settings", "id": "settings", "op": "patch", "values": { "weight_unit": "lb" } },
 		{ "seq": 11, "table": "body_weights", "id": "b7", "op": "delete" }
 	],
-	"after": { "table": "workout_templates", "id": "a1" }
+	"after": { "table": "workout_templates", "id": "a1" },
+	"space": "6f1c2d3e-0a4b-4c5d-8e6f-7a8b9c0d1e2f"
 }
 ```
 
-`writes` may be empty, which makes the call a pull. Values are JSON `string`, `number`, or `null`. A `put` must carry every `NOT NULL` column without a default. `after` is optional and only meaningful on a snapshot: it is the `next` of the previous page, and the response continues after that row. The server ignores `after` on a delta.
+`writes` may be empty, which makes the call a pull. Values are JSON `string`, `number`, or `null`. A `put` must carry every `NOT NULL` column without a default. `after` is optional and only meaningful on a snapshot: it is the `next` of the previous page, and the response continues after that row. The server ignores `after` on a delta. `space` is the client's `_meta.space`, or `""` when it has none; clients older than spaces leave it out.
 
 ## Server apply
 
@@ -132,11 +138,12 @@ Conflicts resolve as column-level last write to arrive. A delete beats a later p
 		},
 		{ "table": "body_weights", "id": "b7", "deleted": 1 }
 	],
-	"next": null
+	"next": null,
+	"space": "6f1c2d3e-0a4b-4c5d-8e6f-7a8b9c0d1e2f"
 }
 ```
 
-The server answers a **snapshot** when `cursor = 0` or `cursor < horizon`, else a **delta**.
+The server answers a **snapshot** when `cursor = 0`, `cursor < horizon`, `after` is present, `cursor > head`, or the request carries a `space` other than its own, else a **delta**. A `space` other than its own means the cursor and any `after` came from another space, so that snapshot starts at the first page and ignores `after`. A cursor past the head came from another space too, but a client keeps that cursor until its snapshot ends, so those pages continue from `after`. Every protocol 2 response carries `space`.
 
 - Delta: `snapshot` is `false`, `rows` are every `_changes` entry with `seq > cursor` joined with the current full row, `next` is `null`.
 - Snapshot: `snapshot` is `true`, `rows` holds live rows only, in schema table order then by `id` (SQLite's default text order), starting after `after` when the request carried one, at most `pageSize` rows (space option, default 1000). `next` is the `{ table, id }` of the last row when more rows follow, else `null`. Every page carries the current `head`.
@@ -149,7 +156,7 @@ First, if the request carried writes and `acked` is greater than the largest `se
 
 Otherwise, in one transaction:
 
-1. Set `_meta.applying = 1`. Read `_meta.after` and `_meta.snapshot_head`; together they say a paged snapshot is in progress.
+1. Set `_meta.applying = 1`. If the response carries a `space` other than `_meta.space`, store it and treat no snapshot as in progress: the server restarted from the first page. Otherwise read `_meta.after` and `_meta.snapshot_head`; together they say a paged snapshot is in progress.
 2. If `snapshot` and no snapshot is in progress, delete every row of every app table except rows that have a pending `_outbox` entry with `seq > acked`. A page requested with `after` never wipes.
 3. For each row, skip it when `_outbox` holds a pending entry for its `(table, id)` whose `seq` is above `acked` (the next sync re-sends that write and the row comes back merged); otherwise `DELETE` for a tombstone or upsert (`INSERT ... ON CONFLICT (id) DO UPDATE SET ... WHERE (columns) IS NOT (excluded columns)`) for a live row. The `WHERE` leaves a row whose values already match untouched, so the echo of the client's own write fires no update hook.
 4. Delete `_outbox` rows with `seq <= acked`.

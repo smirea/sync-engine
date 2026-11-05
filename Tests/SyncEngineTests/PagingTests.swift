@@ -24,7 +24,7 @@ final class PagingTests: XCTestCase {
 
     @discardableResult
     private static func other(_ server: BunServer, _ writes: [SyncWrite] = []) async throws -> SyncResponse {
-        try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: writes, after: nil), to: server.url)
+        try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: writes, after: nil, space: ""), to: server.url)
     }
 
     private static let seven = ["n1", "n2", "n3", "n4", "n5"].enumerated().map { put($0.offset + 1, "notes", $0.element) } + [put(6, "tags", "t1"), put(7, "tags", "t2")]
@@ -39,6 +39,27 @@ final class PagingTests: XCTestCase {
 
     private func meta(_ pool: DatabasePool) throws -> [String] {
         try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('cursor', 'after', 'snapshot_head') ORDER BY key")
+    }
+
+    func testAServerOlderThanSpacesKeepsTheClientInDeltasAfterItsFirstSnapshot() async throws {
+        let server = try BunServer()
+        try await Self.other(server, [Self.put(1, "notes", "n1")])
+        Relay.reset(older: true)
+        let (client, pool) = try client(server)
+
+        await client.sync()
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n2', 'MINE')")
+        await client.sync()
+        try await Self.other(server, [Self.put(2, "notes", "n3")])
+        await client.sync()
+        await client.sync()
+
+        XCTAssertEqual(try Relay.requests.map(\.space), ["", "", "", ""])
+        XCTAssertEqual(try Relay.responses.map(\.space), [nil, nil, nil, nil])
+        XCTAssertEqual(try Relay.responses.map(\.snapshot), [true, false, false, false])
+        XCTAssertEqual(try rows(pool), ["notes/n1:N1", "notes/n2:MINE", "notes/n3:N3"])
+        XCTAssertEqual(try pool.strings("SELECT value FROM _meta WHERE key = 'space'"), [])
+        XCTAssertEqual(try meta(pool), ["cursor=3"])
     }
 
     func testTheEchoOfAPushedWriteCommitsNothingLocally() async throws {
@@ -123,7 +144,7 @@ final class PagingTests: XCTestCase {
         let url = server.url
         Relay.reset { index in
             guard index == 1 else { return }
-            _ = try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: [SyncWrite(seq: 8, table: "notes", id: "n1", op: .patch, values: ["title": .string("EDITED")])], after: nil), to: url)
+            _ = try await BunServer.post(SyncRequest(protocol: 2, client: "other", cursor: 0, writes: [SyncWrite(seq: 8, table: "notes", id: "n1", op: .patch, values: ["title": .string("EDITED")])], after: nil, space: ""), to: url)
         }
 
         await client.sync()

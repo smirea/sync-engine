@@ -35,7 +35,12 @@ export function serve({ schema, authorize, port, hostname, space: spaceOptions, 
 			if (route !== 'POST /sync' && route !== 'GET /live') return new Response('not found', { status: 404 });
 			// withBearer may rebuild the request, which moves the body, so /sync reads the normalized copy from here on.
 			const normalized = withBearer(request);
-			if (!(await authorize(normalized))) return new Response('unauthorized', { status: 401, headers: CORS });
+			if (!(await authorize(normalized))) {
+				// Bun 1.4 resets the connection when a response leaves before the request body was read, so a client would see
+				// ECONNRESET, which reads as offline, instead of the 401 that stops it.
+				if (request.method === 'POST') await normalized.arrayBuffer();
+				return new Response('unauthorized', { status: 401, headers: CORS });
+			}
 			if (route === 'GET /live') {
 				// Echo the subprotocol only when offered: a client that sent none, like the Swift one, fails on an echo.
 				const offered = request.headers

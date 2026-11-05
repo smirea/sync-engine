@@ -122,7 +122,14 @@ struct SyncStore: Sendable {
     func apply(_ response: SyncResponse, acked: Int? = nil, _ db: Database) throws {
         let acked = acked ?? response.acked
         try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 1)")
-        let progress = try snapshot(db)
+        // The server answers another space's cursor with a snapshot from its first page, so pages fetched before belong to
+        // the old space and this page wipes like a first one.
+        let stored = try meta("space", db) ?? ""
+        let moved = response.space.map { $0 != stored } ?? false
+        if moved, let space = response.space {
+            try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('space', ?)", arguments: [space])
+        }
+        let progress = moved ? nil : try snapshot(db)
         if response.snapshot, progress == nil {
             for table in schema.tables {
                 try db.execute(

@@ -127,6 +127,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			cursor: core.cursor(),
 			writes,
 			...(progress ? { after: progress.after } : {}),
+			space: core.space(),
 		};
 		const reply = await fetchFn(`${options.endpoint}/sync`, {
 			method: 'POST',

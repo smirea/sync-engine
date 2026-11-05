@@ -10,6 +10,8 @@ export type Client = {
 	collect(): { writes: Write[]; acked: number };
 	apply(response: SyncResponse, acked: number): Set<string>;
 	cursor(): number;
+	/** The space the cursor came from, `''` before the first response that names one. */
+	space(): string;
 	snapshot(): SnapshotProgress | null;
 	pending(): number;
 	clientId(): string;
@@ -78,7 +80,11 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 				return touched;
 			}
 			setMeta('applying', 1);
-			const progress = snapshot();
+			// The server answers another space's cursor with a snapshot from its first page, so pages fetched before belong to
+			// the old space and this page wipes like a first one.
+			const moved = response.space !== undefined && response.space !== String(meta('space') ?? '');
+			if (moved) setMeta('space', response.space!);
+			const progress = moved ? null : snapshot();
 			const pendingRows = driver
 				.exec('SELECT "table", id FROM _outbox WHERE seq > ?', [acked])
 				.map(row => ({ table: String(row.table), id: String(row.id) }));
@@ -147,6 +153,7 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 		collect,
 		apply,
 		cursor: () => Number(meta('cursor')),
+		space: () => String(meta('space') ?? ''),
 		snapshot,
 		pending: () => Number(driver.exec('SELECT count(*) AS n FROM _outbox')[0]!.n),
 		clientId: () => String(meta('client')),

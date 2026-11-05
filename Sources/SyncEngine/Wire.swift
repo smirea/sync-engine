@@ -52,6 +52,8 @@ struct SyncRequest: Codable, Sendable {
     let cursor: Int
     let writes: [SyncWrite]
     let after: After?
+    /// The space the cursor came from, empty before the first response that names one.
+    let space: String
 }
 
 struct RejectedWrite: Codable, Equatable, Sendable {
@@ -75,6 +77,8 @@ struct SyncResponse: Codable, Equatable, Sendable {
     let snapshot: Bool
     let rows: [PulledRow]
     let next: After?
+    /// Servers older than spaces leave it out.
+    var space: String? = nil
 }
 
 struct LiveMessage: Codable, Sendable {
