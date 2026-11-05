@@ -143,7 +143,7 @@ Conflicts resolve as column-level last write to arrive. A delete beats a later p
 }
 ```
 
-The server answers a **snapshot** when `cursor = 0`, `cursor < horizon`, `after` is present, `cursor > head`, or the request carries a `space` other than its own, else a **delta**. In the last two cases the cursor came from another space, so the snapshot starts at the first page and `after` is ignored. Every protocol 2 response carries `space`.
+The server answers a **snapshot** when `cursor = 0`, `cursor < horizon`, `after` is present, `cursor > head`, or the request carries a `space` other than its own, else a **delta**. A `space` other than its own means the cursor and any `after` came from another space, so that snapshot starts at the first page and ignores `after`. A cursor past the head came from another space too, but a client keeps that cursor until its snapshot ends, so those pages continue from `after`. Every protocol 2 response carries `space`.
 
 - Delta: `snapshot` is `false`, `rows` are every `_changes` entry with `seq > cursor` joined with the current full row, `next` is `null`.
 - Snapshot: `snapshot` is `true`, `rows` holds live rows only, in schema table order then by `id` (SQLite's default text order), starting after `after` when the request carried one, at most `pageSize` rows (space option, default 1000). `next` is the `{ table, id }` of the last row when more rows follow, else `null`. Every page carries the current `head`.

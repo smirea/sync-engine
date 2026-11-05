@@ -707,6 +707,30 @@ describe('space identity', () => {
 		expect(device.client.cursor()).toBe(3);
 	});
 
+	test('a cursor past the head finishes a paged snapshot, with a space or without one', () => {
+		for (const sendsSpace of [true, false]) {
+			const { device, fresh } = moved(['o1', 'o2', 'o3', 'o4', 'o5'], ['f1', 'f2', 'f3'], { pageSize: 2 });
+			expect(device.client.cursor()).toBeGreaterThan(fresh.server.head());
+			const pages: string[][] = [];
+			do {
+				const progress = device.client.snapshot();
+				const page = fresh.server.sync({
+					protocol: 2,
+					client: device.client.clientId(),
+					cursor: device.client.cursor(),
+					writes: [],
+					...(progress ? { after: progress.after } : {}),
+					...(sendsSpace ? { space: device.client.space() } : {}),
+				});
+				device.client.apply(page, 0);
+				pages.push(page.rows.map(r => r.id));
+			} while (device.client.snapshot() && pages.length < 5);
+			expect(pages).toEqual([['f1', 'f2'], ['f3']]);
+			expect(device.rows().map(r => r.id)).toEqual(['f1', 'f2', 'f3']);
+			expect(device.client.cursor()).toBe(3);
+		}
+	});
+
 	test('a response from a server older than spaces leaves the stored space alone', () => {
 		const { a, server } = setup();
 		a.pull();

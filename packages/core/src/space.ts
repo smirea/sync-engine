@@ -391,14 +391,17 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 			const head = meta('head');
 
 			const space = spaceId();
-			// A cursor counts only in the space that issued it. One from another space, or one past this head, which only
-			// another space could have issued, would skip rows, so it gets a snapshot like cursor 0, from the first page.
-			const foreign =
-				(request.protocol === 2 && request.space !== undefined && request.space !== space) || request.cursor > head;
-			// A cursor below the horizon may have missed tombstones that are gone, so it gets a snapshot like cursor 0.
+			// A cursor counts only in the space that issued it, so one from another space would skip rows: it gets a snapshot
+			// like cursor 0, from the first page, since an `after` it carries is another space's too. The client stores this
+			// space with the first page, so its next pages match and advance.
+			const foreign = request.protocol === 2 && request.space !== undefined && request.space !== space;
 			const paged = request.protocol === 2;
 			const after = paged && !foreign ? (request.after ?? null) : null;
-			const snapshotting = foreign || after !== null || request.cursor === 0 || request.cursor < meta('horizon');
+			// A cursor past the head was issued by another space too, for a client that sends no space. The client keeps it
+			// until its snapshot's last page, so its later pages still carry it and must continue from `after`.
+			// A cursor below the horizon may have missed tombstones that are gone, so it gets a snapshot like cursor 0.
+			const snapshotting =
+				foreign || after !== null || request.cursor === 0 || request.cursor > head || request.cursor < meta('horizon');
 			const page = snapshotting
 				? snapshot(after, paged ? pageSize : null)
 				: { rows: delta(request.cursor), next: null };
