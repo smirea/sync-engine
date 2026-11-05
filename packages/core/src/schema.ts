@@ -141,11 +141,17 @@ export const clientStatements = (schema: Schema): string[] => [
 
 export function migrate(driver: SqlDriver, schema: Schema, side: 'server' | 'client'): void {
 	driver.transaction(() => {
-		for (const sql of schema.ddl.app) driver.exec(sql);
-		for (const table of schema.tables) {
+		let grew = false;
+		for (const [index, table] of schema.tables.entries()) {
 			const present = new Set(driver.exec(`PRAGMA table_info(${table.name})`).map(row => row.name));
+			if (present.size === 0) {
+				driver.exec(schema.ddl.app[index]!);
+				grew = true;
+				continue;
+			}
 			for (const column of table.columns) {
 				if (present.has(column.name)) continue;
+				grew = true;
 				if (column.notNull && column.default === undefined) {
 					throw new Error(
 						`${table.name}.${column.name}: a NOT NULL column without a default cannot be added to an existing table`,
@@ -155,5 +161,12 @@ export function migrate(driver: SqlDriver, schema: Schema, side: 'server' | 'cli
 			}
 		}
 		for (const sql of schema.ddl[side]) driver.exec(sql);
+		// Rows this client pulled before it had the new table or column were stored without it, and the server only sends a
+		// row again when it changes, so values other devices set before the upgrade would stay hidden. A fresh snapshot
+		// brings them; it runs in this transaction so a crash cannot leave the shape grown and the cursor kept.
+		if (side === 'client' && grew) {
+			driver.exec("UPDATE _meta SET value = 0 WHERE key = 'cursor'");
+			driver.exec("DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')");
+		}
 	});
 }

@@ -8,7 +8,7 @@ Protocol 2 adds horizon compaction on the server and paged snapshots. A server a
 
 Every synced table has `id TEXT PRIMARY KEY`. Columns use SQLite storage classes only: `TEXT`, `INTEGER`, `REAL`. JSON is `TEXT`. Booleans are `INTEGER` 0 or 1. Timestamps are whatever text or integer the app chooses; the engine never interprets them. The DDL is identical on the server and on every client, generated from the app's Drizzle `sqlite-core` schema.
 
-Schema evolution is additive only. On start, server and client compare `PRAGMA table_info` with the schema and run `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD COLUMN` for what is missing. A removed column stays in place and is ignored. A column whose type must change gets a new name. Unknown columns in a write are ignored by the server; unknown columns in a pulled row are ignored by the client.
+Schema evolution is additive only. On start, server and client compare `PRAGMA table_info` with the schema and run `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD COLUMN` for what is missing. A removed column stays in place and is ignored. A column whose type must change gets a new name. Unknown columns in a write are ignored by the server; unknown columns in a pulled row are ignored by the client. A client whose migrate added a table or a column to an existing database sets `_meta.cursor` to 0 and drops a snapshot in progress (`after`, `snapshot_head`) in the same transaction, so its next sync takes a fresh snapshot: rows it pulled before the upgrade were stored without the new column, and the server resends a row only when it changes.
 
 ## Server tables
 

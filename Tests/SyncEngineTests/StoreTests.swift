@@ -22,6 +22,31 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(writes, [SyncWrite(seq: 3, table: "notes", id: "n1", op: .patch, values: ["title": .string("New"), "stars": .integer(7)])])
     }
 
+    func testAGrownSchemaRestartsFromASnapshotSoValuesSetBeforeTheUpgradeArrive() throws {
+        let pool = try Fixture.pool()
+        let old = SyncStore(schema: SyncSchema(tables: [SyncTable(name: "notes", columns: ["title", "body"])], statements: [
+            "CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT)",
+            "CREATE TABLE IF NOT EXISTS _outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, \"table\" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, col TEXT)",
+            "CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)",
+        ]))
+        try pool.write { try old.migrate($0) }
+        try pool.write { try old.apply(Fixture.response(head: 4, rows: [Fixture.note("n1", title: "a", stars: 3)]), $0) }
+        try pool.write { try old.apply(Fixture.response(head: 6, snapshot: true, rows: [Fixture.note("n1", title: "a", stars: 3)], next: After(table: "notes", id: "n1")), $0) }
+        XCTAssertNotNil(try pool.read { try old.snapshot($0) })
+
+        var statements = Fixture.schema.statements
+        statements.insert("ALTER TABLE notes ADD COLUMN stars INTEGER NOT NULL DEFAULT 0", at: 1)
+        let store = SyncStore(schema: SyncSchema(tables: Fixture.schema.tables, statements: statements))
+        try pool.write { try store.migrate($0) }
+        XCTAssertEqual(try pool.read { try store.cursor($0) }, 0)
+        XCTAssertNil(try pool.read { try store.snapshot($0) })
+        try pool.write { try store.apply(Fixture.response(head: 6, snapshot: true, rows: [Fixture.note("n1", title: "a", stars: 3)]), $0) }
+        XCTAssertEqual(try pool.strings("SELECT title || ':' || stars FROM notes"), ["a:3"])
+
+        try pool.write { try store.migrate($0) }
+        XCTAssertEqual(try pool.read { try store.cursor($0) }, 6)
+    }
+
     func testInsertThenDeleteIsOneDelete() throws {
         let (pool, store) = try Fixture.migratedPool()
         try pool.sql("INSERT INTO tags (id, name) VALUES ('t1', 'a')")

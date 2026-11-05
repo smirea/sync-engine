@@ -250,6 +250,46 @@ describe('two clients and one space', () => {
 			'notes.owner: a NOT NULL column without a default cannot be added to an existing table',
 		);
 	});
+
+	test('a client that gains a column or a table re-pulls the values other devices set before it upgraded', () => {
+		const v1 = setup();
+		insert(v1.a, 'n1', 'old');
+		v1.a.sync();
+		v1.b.pull();
+		const labels = sqliteTable('labels', { id: text('id').primaryKey(), name: text('name').notNull() });
+		const v2 = defineSchema({
+			tables: {
+				notes: sqliteTable('notes', {
+					id: text('id').primaryKey(),
+					title: text('title').notNull(),
+					body: text('body').notNull().default(''),
+					done: integer('done', { mode: 'boolean' }).notNull().default(false),
+					tags: text('tags', { mode: 'json' }).notNull().default([]),
+					priority: integer('priority').notNull().default(0),
+				}),
+				labels,
+			},
+		});
+		const server = createSpace(v1.serverDb, v2);
+		server.migrate();
+		const a = createClient(v1.a.db, v2);
+		a.migrate();
+		update(v1.a, 'n1', 'priority', 5);
+		v1.a.db.exec("INSERT INTO labels (id, name) VALUES ('l1', 'home')");
+		syncPages(server, a);
+		syncPages(server, v1.b.client);
+		expect(v1.b.client.cursor()).toBe(a.cursor());
+		insert(v1.b, 'n2', 'pending');
+		const b = createClient(v1.b.db, v2);
+		b.migrate();
+		syncPages(server, b);
+		expect(v1.b.rows()).toEqual([row('n1', 'old', { priority: 5 }), row('n2', 'pending', { priority: 0 })]);
+		expect(v1.b.db.exec('SELECT id, name FROM labels')).toEqual([{ id: 'l1', name: 'home' }]);
+		expect(server.dump().notes).toEqual([row('n1', 'old', { priority: 5 }), row('n2', 'pending', { priority: 0 })]);
+		const head = b.cursor();
+		b.migrate();
+		expect(b.cursor()).toBe(head);
+	});
 });
 
 describe('protocol amendments', () => {
