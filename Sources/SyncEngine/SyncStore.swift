@@ -28,6 +28,7 @@ struct SyncStore: Sendable {
 
     /// The generator emits the `ALTER TABLE` for a grown schema; the client only makes rerunning it harmless.
     func migrate(_ db: Database) throws {
+        let grows = try schema.tables.contains { !Set(["id"] + $0.columns).isSubset(of: try columns(of: $0.name, db)) }
         let addColumn = /^\s*ALTER\s+TABLE\s+"?(\w+)"?\s+ADD\s+COLUMN\s+"?(\w+)"?/.ignoresCase()
         for statement in schema.statements {
             if let match = statement.firstMatch(of: addColumn),
@@ -41,6 +42,12 @@ struct SyncStore: Sendable {
             if let missing = (["id"] + table.columns).first(where: { !present.contains($0) }) {
                 throw SyncSchemaError(description: "\(table.name).\(missing) is in the schema but not in the database; the DDL must add it")
             }
+        }
+        // Rows pulled before the new table or column were stored without it, and the server only resends a row when it
+        // changes, so a fresh snapshot brings the values other devices set before the upgrade.
+        if grows {
+            try db.execute(sql: "UPDATE _meta SET value = 0 WHERE key = 'cursor'")
+            try db.execute(sql: "DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')")
         }
         try db.execute(sql: "INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", arguments: [UUID().uuidString.lowercased()])
     }
