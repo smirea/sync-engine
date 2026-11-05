@@ -8,7 +8,7 @@
 Full rules in [`docs/decisions/workflow.md`](docs/decisions/workflow.md).
 
 - One PR per thread, never stacked. Rebase only when GitHub reports a real conflict.
-- After opening a PR, run `bun scripts/pr-ship.ts [--merge]` in the foreground until it exits 0. Its exit code names the next step.
+- After opening a PR, run `pr-ship [--merge]` (shared, from `~/code/scripts`) in the foreground until it exits 0. Its exit code names the next step.
 - Never skip git hooks. Fix the failure instead.
 - Run only the relevant tests locally; CI runs the full suite.
 - After a PR merges, bump the sync-engine pin in every repo that depends on it (today `a-better-me`: `bun.lock` and `Package.resolved`). Commit the bump straight to that repo's `master`; open a PR there only when the merge broke the protocol, an API or a schema consumers use.

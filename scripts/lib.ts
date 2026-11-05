@@ -1,6 +1,5 @@
 /**
- * What the repository scripts share: a process runner, the dotenv reader, and the worktree list. No npm imports:
- * `setup-worktree` runs before `bun install`.
+ * What the repository scripts share: a process runner, the dotenv reader, and the worktree list. No npm imports.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -53,7 +52,7 @@ export function parseDotenv(text: string): Values {
 	return values;
 }
 
-/** A worktree's `.env.override`, which `setup-worktree` writes with its ports, or null without one. */
+/** A worktree's `.env.override`, which `agent-t3-worktree setup` writes with its ports, or null without one. */
 export function readOverride(worktree: string): Values | null {
 	const file = join(worktree, '.env.override');
 	return existsSync(file) ? parseDotenv(readFileSync(file, 'utf8')) : null;

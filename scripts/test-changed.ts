@@ -40,7 +40,9 @@ function resolveImport(from: string, specifier: string): string | null {
 const transpiler = new Bun.Transpiler({ loader: 'tsx' });
 const importers = new Map<string, Set<string>>();
 for (const file of walk(root, [])) {
-	for (const { path } of transpiler.scanImports(readFileSync(file, 'utf8'))) {
+	// scanImports rejects a shebang line, which executable scripts start with.
+	const source = readFileSync(file, 'utf8').replace(/^#!.*/, '');
+	for (const { path } of transpiler.scanImports(source)) {
 		const target = resolveImport(file, path);
 		if (target) importers.set(target, (importers.get(target) ?? new Set()).add(file));
 	}
