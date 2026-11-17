@@ -192,6 +192,8 @@ describe.each(browsers)('%s', (name, browserType) => {
 		logged(async () => {
 			const { open } = await setup();
 			const a = await open();
+			// The host's first pull reports a change of its own; count only what the batch fires.
+			await until(async () => (await a.evaluate(() => window.tab.statuses.length)) > 0);
 			const codes = await a.evaluate(async () => {
 				const code = (promise: Promise<unknown>) =>
 					promise.then(
