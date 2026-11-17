@@ -1,13 +1,12 @@
 # Continuous integration
 
-`workflows/ci.yml` runs checks, tests, and builds on pull requests, default-branch pushes, and manual dispatches. Each task reports success when its stack has no relevant changes. Manual dispatches and initial pushes run every configured task. Documentation changes are ignored; workflow changes run every task. Edit `scripts/changes.ts` when adding a new component or changing the layout. All CI helpers run with Bun, pinned by `.bun-version`, including Swift and empty scaffolds.
+`workflows/ci.yml` runs on pull requests, `master` pushes and manual dispatches. A newer push cancels the run in progress. Every check is its own job, and all of them run in parallel.
 
-Actions are pinned to commit SHAs. Dependabot checks for action updates weekly. A failure in change detection fails the task jobs too.
+- **Bun** (`lint:ci`, `typecheck`, `test`, `build`): one job per root package script, the same scripts the pre-commit hook calls. They run on every change and time out at 5 minutes. CI caches package downloads, then installs with `--frozen-lockfile`. `.bun-version` and `packageManager` pin Bun; update them together.
+- **`web`**: the Playwright browser suite, `bun run test:web`.
+- **`proofs`**: the Bend proofs under the Lean kernel, `bun scripts/spec.ts --install`.
+- **`swift`**: `swift test` on a macOS runner.
 
-Bun tasks run the root `lint:ci` and `typecheck`, `test`, and `build` scripts. Keep CI checks read-only. Tests pass until tests are added, and failures then fail CI. `.bun-version` and `packageManager` pin Bun to the version used during scaffolding; update them together. Commit `bun.lock` after changing dependencies. CI caches package downloads, then always installs with `--frozen-lockfile`.
+The last three sit behind `scripts/changes.ts`, which decides from the diff whether each one's inputs changed. When they did not, the job reports success without running, and `swift` does so from a Linux runner, so a change that touches no Swift never waits for a macOS machine. Manual dispatches, initial pushes and changes under `.github/` run every job. Documentation changes are ignored. A failure in change detection fails those jobs too. Edit `scripts/changes.ts` when a job gains or loses an input.
 
-Apps using env-manager regenerate ignored outputs from the tracked `.env` defaults with the pinned development dependency. Keep defaults harmless and complete enough for CI. If a test needs a credential, supply it explicitly through GitHub Actions secrets. Never commit `.env.local` or native local secrets, and never cache environment outputs.
-
-Swift checks compile the package for macOS. Builds compile the shared `App` Xcode scheme for a generic iOS simulator without signing. Tests run Swift package test targets and Xcode testables or test plans when configured; no test targets passes. Xcode tests use an available iPhone simulator. Native jobs use the macOS runner's installed Xcode and Swift, and cache only package dependencies with a key including both toolchain versions. Commit `Package.resolved` when adding dependencies.
-
-Empty scaffolds have successful placeholder tasks. Replace them with real commands when choosing a stack. Configure branch protection to require the generated task names you need. After renaming the default branch, update the workflow's push branch.
+Actions are pinned to commit SHAs. Dependabot checks for action updates weekly. Keep CI checks read-only.
