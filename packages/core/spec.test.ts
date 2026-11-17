@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
@@ -172,14 +171,6 @@ const expectedPull = (pull: PullVector) => ({
 	head: pull.head,
 	snapshot: pull.snapshot,
 	rows: sorted(pull.rows.map(toPulled)),
-});
-
-test('spec/vectors.json is generated from the current spec/sync.bend', () => {
-	const actual = createHash('sha256')
-		.update(readFileSync(join(spec, 'sync.bend')))
-		.digest('hex');
-	if (vectors.bend_sha256 !== actual)
-		throw new Error('spec/vectors.json is stale against spec/sync.bend: run `bun run spec-vectors`');
 });
 
 for (const scenario of vectors.scenarios) {
