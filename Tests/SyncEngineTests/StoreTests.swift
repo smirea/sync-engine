@@ -202,7 +202,7 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(try pool.int("SELECT value FROM _meta WHERE key = 'cursor'"), 4)
     }
 
-    func testMigrateAddsAColumnOnceAndNamesOneTheDDLForgot() throws {
+    func testMigrateAddsAColumnOnceAndRefusesOneTheDDLForgot() throws {
         let pool = try Fixture.pool()
         try pool.sql("CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL, weight REAL)")
         try pool.write { try SyncStore(schema: Fixture.schema).migrate($0) }
