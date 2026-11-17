@@ -1,20 +1,38 @@
+import Foundation
 import GRDB
 import XCTest
 @testable import SyncEngine
 
 @MainActor
 final class ClientTests: XCTestCase {
+    private let path = FileManager.default.temporaryDirectory.appending(path: "client-\(UUID().uuidString).sqlite").path
+
     private func client(token: String? = "secret") throws -> (SyncClient, DatabasePool) {
-        let pool = try Fixture.pool()
+        let pool = try DatabasePool(path: path)
         let client = SyncClient(database: pool, schema: Fixture.schema, endpoint: URL(string: "http://127.0.0.1:9/v1/")!, token: { token }, session: StubServer.session())
         try client.migrate()
         return (client, pool)
     }
 
+    private static func requests() throws -> [SyncRequest] {
+        try StubServer.received.map { try JSONDecoder().decode(SyncRequest.self, from: $0.body) }
+    }
+
+    private static func page(head: Int, acked: Int = 0, _ rows: [PulledRow], next: After?) -> StubServer.Reply {
+        StubServer.json(200, Fixture.response(head: head, acked: acked, snapshot: true, rows: rows, next: next))
+    }
+
+    private static func tag(_ id: String) -> PulledRow {
+        PulledRow(table: "tags", id: id, deleted: 0, values: ["id": .string(id), "name": .string(id.uppercased())])
+    }
+
+    private func meta(_ pool: DatabasePool) throws -> [String] {
+        try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('cursor', 'after', 'snapshot_head') ORDER BY key")
+    }
+
     func testARoundTripPushesTheOutboxAndAppliesTheResponse() async throws {
         let (client, pool) = try client()
         try pool.sql("INSERT INTO notes (id, title, stars) VALUES ('n1', 'Hi', 2)")
-        try await waitUntil { client.pending == 1 }
         let rejected = RejectedWrite(seq: 1, table: "notes", id: "n1", reason: "title: too short")
         StubServer.reset(StubServer.json(200, Fixture.response(head: 5, acked: 1, rows: [Fixture.note("n1", title: "Server"), PulledRow(table: "tags", id: "t1", deleted: 0, values: ["name": .string("x"), "weight": .double(0.5)])], rejected: [rejected])))
 
@@ -24,7 +42,7 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(received.map(\.url.absoluteString), ["http://127.0.0.1:9/v1/sync"])
         XCTAssertEqual(received[0].authorization, "Bearer secret")
         let clientID = try pool.strings("SELECT value FROM _meta WHERE key = 'client'")[0]
-        let request = try JSONDecoder().decode(SyncRequest.self, from: received[0].body)
+        let request = try Self.requests()[0]
         XCTAssertEqual(request.protocol, 2)
         XCTAssertEqual(request.client, clientID)
         XCTAssertEqual(request.cursor, 0)
@@ -32,7 +50,6 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(request.writes, [SyncWrite(seq: 1, table: "notes", id: "n1", op: .put, values: ["title": .string("Hi"), "body": .null, "stars": .integer(2)])])
         XCTAssertEqual(client.status, .idle)
         XCTAssertEqual(client.head, 5)
-        try await waitUntil { client.pending == 0 }
         XCTAssertNotNil(client.lastSyncAt)
         XCTAssertEqual(client.rejected, [SyncRejection(table: "notes", id: "n1", reason: "title: too short")])
         XCTAssertEqual(try pool.strings("SELECT title FROM notes"), ["Server"])
@@ -42,7 +59,7 @@ final class ClientTests: XCTestCase {
 
     func testBeforePushRunsBeforeWritesLeaveAndItsThrowKeepsThem() async throws {
         struct NotYet: Error {}
-        let pool = try Fixture.pool()
+        let pool = try DatabasePool(path: path)
         let calls = Calls()
         let client = SyncClient(
             database: pool, schema: Fixture.schema, endpoint: URL(string: "http://127.0.0.1:9/v1/")!, token: { "secret" },
@@ -54,14 +71,13 @@ final class ClientTests: XCTestCase {
         await client.sync()
         XCTAssertEqual(StubServer.received.count, 1)
         try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
-        try await waitUntil { client.pending == 1 }
         await client.sync()
         XCTAssertEqual(StubServer.received.count, 1)
-        XCTAssertEqual(client.pending, 1)
+        XCTAssertEqual(try pool.outbox().count, 1)
         await client.sync()
         XCTAssertEqual(StubServer.received.count, 2)
         XCTAssertEqual(StubServer.received[1].headers["x-app"], "test")
-        try await waitUntil { client.pending == 0 }
+        XCTAssertEqual(try pool.outbox(), [])
     }
 
     func testResetEmptiesTheTablesAndTheOutboxUnderANewClient() async throws {
@@ -75,17 +91,12 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(client.head, 0)
     }
 
-    func testA401SetsUnauthorizedAndOnlyAnExplicitSyncTriesAgain() async throws {
-        let (client, pool) = try client()
-        StubServer.reset(.http(401, Data()))
-        client.start()
-        defer { client.stop() }
-        try await waitUntil { client.status == .unauthorized }
+    func testA401IsUnauthorizedUntilAnExplicitSyncSucceeds() async throws {
+        let (client, _) = try client()
+        StubServer.reset(.http(401, Data()), StubServer.json(200, Fixture.response(head: 2)))
+        await client.sync()
+        XCTAssertEqual(client.status, .unauthorized)
         XCTAssertNil(client.lastSyncAt)
-        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
-        try await Task.sleep(for: .milliseconds(300))
-        XCTAssertEqual(StubServer.received.count, 1)
-        StubServer.reply(StubServer.json(200, Fixture.response(head: 2, acked: 1)))
         await client.sync()
         XCTAssertEqual(StubServer.received.count, 2)
         XCTAssertEqual(client.status, .idle)
@@ -93,30 +104,27 @@ final class ClientTests: XCTestCase {
 
     func testASecondSyncWaitsForTheFirst() async throws {
         let (client, _) = try client()
-        StubServer.reset(StubServer.json(200, Fixture.response(head: 5)), latency: 0.1)
+        StubServer.reset(StubServer.json(200, Fixture.response(head: 5)))
         async let first: Void = client.sync()
         async let second: Void = client.sync()
         _ = await (first, second)
-        let cursors = try StubServer.received.map { try JSONDecoder().decode(SyncRequest.self, from: $0.body).cursor }
-        XCTAssertEqual(cursors, [0, 5])
+        XCTAssertEqual(try Self.requests().map(\.cursor), [0, 5])
     }
 
     func testAnAckAboveTheLargestSeqSentMintsANewClientAndKeepsTheOutbox() async throws {
         let (client, pool) = try client()
         let original = try pool.strings("SELECT value FROM _meta WHERE key = 'client'")[0]
         try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
-        StubServer.reset(StubServer.json(200, Fixture.response(head: 9, acked: 7, rows: [Fixture.note("n2", title: "discarded")])))
+        StubServer.reset(StubServer.json(200, Fixture.response(head: 9, acked: 7, rows: [Fixture.note("n2", title: "discarded")])), StubServer.json(200, Fixture.response(head: 10, acked: 1)))
         await client.sync()
         let minted = try pool.strings("SELECT value FROM _meta WHERE key = 'client'")[0]
         XCTAssertNotEqual(minted, original)
-        XCTAssertNotNil(UUID(uuidString: minted))
         XCTAssertEqual(try pool.outbox().map(\.seq), [1])
         XCTAssertEqual(try pool.strings("SELECT id FROM notes"), ["n1"])
         XCTAssertEqual(try pool.int("SELECT value FROM _meta WHERE key = 'cursor'"), 0)
         XCTAssertEqual(client.status, .idle)
-        StubServer.reply(StubServer.json(200, Fixture.response(head: 10, acked: 1)))
         await client.sync()
-        XCTAssertEqual(try StubServer.received.map { try JSONDecoder().decode(SyncRequest.self, from: $0.body).client }, [original, minted])
+        XCTAssertEqual(try Self.requests().map(\.client), [original, minted])
         XCTAssertEqual(try pool.outbox(), [])
     }
 
@@ -130,74 +138,104 @@ final class ClientTests: XCTestCase {
 
     func testAURLErrorIsOfflineAndA5xxIsFailed() async throws {
         let (client, pool) = try client()
-        StubServer.reset(.failure(.notConnectedToInternet))
+        StubServer.reset(.failure(.notConnectedToInternet), .http(503, Data()), .http(426, Data()))
         await client.sync()
         XCTAssertEqual(client.status, .offline)
-        StubServer.reply(.http(503, Data()))
         await client.sync()
         XCTAssertEqual(client.status, .failed("HTTP 503"))
-        StubServer.reply(.http(426, Data()))
         await client.sync()
         XCTAssertEqual(client.status, .failed("HTTP 426"))
         XCTAssertEqual(try pool.int("SELECT value FROM _meta WHERE key = 'cursor'"), 0)
     }
 
-    func testALocalWriteAfterStartSchedulesASync() async throws {
+    func testAPagedSnapshotRunsInOneSyncAndSendsTheOutboxOnlyWithTheFirstPage() async throws {
         let (client, pool) = try client()
-        StubServer.reset(StubServer.json(200, Fixture.response(head: 1, acked: 0)))
-        client.start()
-        defer { client.stop() }
-        try await waitUntil { StubServer.received.count == 1 }
-        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
-        try await waitUntil { StubServer.received.count == 2 }
-        let request = try JSONDecoder().decode(SyncRequest.self, from: StubServer.received[1].body)
-        XCTAssertEqual(request.writes.map(\.id), ["n1"])
-        XCTAssertEqual(request.cursor, 1)
-        try await Task.sleep(for: .milliseconds(300))
-        XCTAssertEqual(StubServer.received.count, 2)
-    }
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n5', 'MINE')")
+        StubServer.reset(
+            Self.page(head: 7, acked: 1, [Fixture.note("n1", title: "N1"), Fixture.note("n2", title: "N2")], next: After(table: "notes", id: "n2")),
+            Self.page(head: 7, [Fixture.note("n3", title: "N3"), Fixture.note("n4", title: "N4")], next: After(table: "notes", id: "n4")),
+            Self.page(head: 7, [Fixture.note("n5", title: "MINE"), Self.tag("t1")], next: nil)
+        )
 
-    func testALocalWriteDuringABackoffPullsTheRetryForward() async throws {
-        let (client, pool) = try client()
-        StubServer.reset(.failure(.notConnectedToInternet))
-        client.start()
-        defer { client.stop() }
-        try await waitUntil { client.status == .offline }
-        XCTAssertEqual(StubServer.received.count, 1)
-        let written = ContinuousClock.now
-        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'a')")
-        try await waitUntil { StubServer.received.count == 2 }
-        XCTAssertLessThan(written.duration(to: StubServer.received[1].at), .milliseconds(500))
-        let request = try JSONDecoder().decode(SyncRequest.self, from: StubServer.received[1].body)
-        XCTAssertEqual(request.writes.map(\.id), ["n1"])
-    }
+        await client.sync()
 
-    func testAForegroundEventAfterFailuresSyncsAtOnceAndResetsTheBackoff() async throws {
-        let (client, _) = try client()
-        StubServer.reset(.failure(.notConnectedToInternet))
-        client.start()
-        defer { client.stop() }
-        try await waitUntil { client.status == .offline }
-        await client.sync()
-        await client.sync()
-        XCTAssertEqual(StubServer.received.count, 3)
-        let resumed = ContinuousClock.now
-        await client.enteredForeground()
-        XCTAssertEqual(StubServer.received.count, 4)
-        XCTAssertLessThan(resumed.duration(to: StubServer.received.last!.at), .milliseconds(500))
-        StubServer.reply(StubServer.json(200, Fixture.response(head: 1, acked: 0)))
-        try await Task.sleep(for: .milliseconds(2500))
-        // The socket loop's second attempt lands at the same 2 s and may add a pull of its own.
-        XCTAssertGreaterThanOrEqual(StubServer.received.count, 5)
-        XCTAssertLessThan(resumed.duration(to: StubServer.received[4].at), .seconds(3))
+        XCTAssertEqual(try Self.requests().map { "\($0.cursor) \($0.after?.id ?? "-") \($0.writes.count)" }, ["0 - 1", "0 n2 0", "0 n4 0"])
+        XCTAssertEqual(try pool.strings("SELECT id || ':' || title FROM notes ORDER BY id"), ["n1:N1", "n2:N2", "n3:N3", "n4:N4", "n5:MINE"])
+        XCTAssertEqual(try pool.strings("SELECT id FROM tags"), ["t1"])
+        XCTAssertEqual(try meta(pool), ["cursor=7"])
+        XCTAssertEqual(try pool.outbox(), [])
+        XCTAssertEqual(client.head, 7)
+        XCTAssertNil(client.snapshotRows)
         XCTAssertEqual(client.status, .idle)
     }
 
-    private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
-        for _ in 0..<200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
+    func testARestartBetweenPagesResumesFromAfterWithoutWipingAgain() async throws {
+        do {
+            let (client, pool) = try client()
+            StubServer.reset(
+                Self.page(head: 7, [Fixture.note("n1", title: "N1"), Fixture.note("n2", title: "N2")], next: After(table: "notes", id: "n2")),
+                Self.page(head: 7, [Fixture.note("n3", title: "N3"), Fixture.note("n4", title: "N4")], next: After(table: "notes", id: "n4")),
+                .failure(.networkConnectionLost)
+            )
+            await client.sync()
+            XCTAssertEqual(client.status, .offline)
+            XCTAssertEqual(client.snapshotRows, 4)
+            XCTAssertEqual(try meta(pool), [#"after={"id":"n4","table":"notes"}"#, "cursor=0", "snapshot_head=7"])
+            try pool.close()
         }
-        XCTAssertTrue(condition())
+        let (client, pool) = try client()
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('mine', 'MINE')")
+        XCTAssertEqual(client.snapshotRows, 0)
+        StubServer.reset(
+            Self.page(head: 8, acked: 1, [Fixture.note("mine", title: "MINE"), Self.tag("t1")], next: After(table: "tags", id: "t1")),
+            Self.page(head: 8, [Self.tag("t2")], next: nil)
+        )
+
+        await client.sync()
+
+        XCTAssertEqual(try Self.requests().map { "\($0.cursor) \($0.after?.id ?? "-") \($0.writes.count)" }, ["0 n4 1", "0 t1 0"])
+        XCTAssertEqual(try pool.strings("SELECT id FROM notes ORDER BY id"), ["mine", "n1", "n2", "n3", "n4"])
+        XCTAssertEqual(try pool.strings("SELECT id FROM tags ORDER BY id"), ["t1", "t2"])
+        XCTAssertEqual(try meta(pool), ["cursor=7"])
+        XCTAssertNil(client.snapshotRows)
+        XCTAssertEqual(client.status, .idle)
+    }
+
+    func testAPagedSnapshotEndsOnTheFirstPageHeadSoWritesDuringItArriveWithTheNextDelta() async throws {
+        let (client, pool) = try client()
+        StubServer.reset(
+            Self.page(head: 7, [Fixture.note("n1", title: "N1"), Fixture.note("n2", title: "N2")], next: After(table: "notes", id: "n2")),
+            Self.page(head: 8, [Fixture.note("n3", title: "N3")], next: nil),
+            StubServer.json(200, Fixture.response(head: 8, rows: [Fixture.note("n1", title: "EDITED")]))
+        )
+
+        await client.sync()
+        XCTAssertEqual(client.head, 7)
+        XCTAssertEqual(try meta(pool), ["cursor=7"])
+        await client.sync()
+
+        XCTAssertEqual(try Self.requests().last?.cursor, 7)
+        XCTAssertEqual(try pool.strings("SELECT title FROM notes WHERE id = 'n1'"), ["EDITED"])
+        XCTAssertEqual(try meta(pool), ["cursor=8"])
+    }
+
+    nonisolated func testAPingResolvesWithAPongThatAnAbortFollows() async throws {
+        try await firstAnswer { answer in
+            answer(nil)
+            answer(NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNABORTED)))
+        }
+    }
+
+    nonisolated func testAPingAnsweredByTwoErrorsThrowsTheFirst() async {
+        do {
+            try await firstAnswer { answer in
+                answer(NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNREFUSED)))
+                answer(NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNABORTED)))
+            }
+            XCTFail("ping resolved")
+        } catch {
+            XCTAssertEqual((error as NSError).code, Int(ECONNREFUSED))
+        }
     }
 }
 

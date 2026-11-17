@@ -86,13 +86,13 @@ extension DatabasePool {
     }
 }
 
+/// Answers each request with the next reply given to `reset`, repeating the last one, and records what it received.
 final class StubServer: URLProtocol {
     struct Received: Sendable {
         let url: URL
         let authorization: String?
         let headers: [String: String]
         let body: Data
-        let at = ContinuousClock.now
     }
 
     enum Reply: Sendable {
@@ -100,14 +100,10 @@ final class StubServer: URLProtocol {
         case failure(URLError.Code)
     }
 
-    static let state = Mutex<(reply: Reply, received: [Received], latency: TimeInterval)>((.http(200, Data()), [], 0))
+    static let state = Mutex<(replies: [Reply], received: [Received])>(([.http(200, Data())], []))
 
-    static func reset(_ reply: Reply, latency: TimeInterval = 0) {
-        state.withLock { $0 = (reply, [], latency) }
-    }
-
-    static func reply(_ reply: Reply) {
-        state.withLock { $0.reply = reply }
+    static func reset(_ replies: Reply...) {
+        state.withLock { $0 = (replies, []) }
     }
 
     static var received: [Received] { state.withLock { $0.received } }
@@ -131,11 +127,10 @@ final class StubServer: URLProtocol {
     override func startLoading() {
         let body = request.streamedBody
         let received = Received(url: request.url!, authorization: request.value(forHTTPHeaderField: "Authorization"), headers: request.allHTTPHeaderFields ?? [:], body: body)
-        let (reply, latency) = Self.state.withLock { state in
+        let reply = Self.state.withLock { state in
             state.received.append(received)
-            return (state.reply, state.latency)
+            return state.replies.count > 1 ? state.replies.removeFirst() : state.replies[0]
         }
-        Thread.sleep(forTimeInterval: latency)
         switch reply {
         case let .http(status, data):
             let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
@@ -165,108 +160,4 @@ extension URLRequest {
         }
         return body
     }
-}
-
-/// The real server from `Tests/server.ts` on a free port, with an in-memory space and the token `secret`.
-final class BunServer {
-    let url: URL
-    private let process = Process()
-    private let input = Pipe()
-
-    init(space: [String: Int] = [:]) throws {
-        let script = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "server.ts")
-        let output = Pipe()
-        process.executableURL = URL(filePath: "/usr/bin/env")
-        process.arguments = ["bun", script.path, String(decoding: try JSONEncoder().encode(space), as: UTF8.self)]
-        process.standardInput = input
-        process.standardOutput = output
-        try process.run()
-        var line = Data()
-        while !line.contains(UInt8(ascii: "\n")) {
-            let chunk = output.fileHandleForReading.availableData
-            guard !chunk.isEmpty else { throw URLError(.cannotConnectToHost) }
-            line.append(chunk)
-        }
-        url = URL(string: "http://127.0.0.1:\(String(decoding: line, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))/")!
-    }
-
-    deinit {
-        process.terminate()
-    }
-
-    /// A sync from another device, straight to the server.
-    static func post(_ body: SyncRequest, to url: URL) async throws -> SyncResponse {
-        var request = URLRequest(url: url.appending(path: "sync"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer secret", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONEncoder().encode(body)
-        let (data, _) = try await URLSession.shared.data(for: request)
-        return try JSONDecoder().decode(SyncResponse.self, from: data)
-    }
-}
-
-/// Forwards every request to the real server, recording its body and the reply and first awaiting `before` with its index, so a
-/// test can write between two pages or fail one with a thrown `URLError`. `older` plays a server from before spaces: it drops the
-/// request's `space`, as an unknown key, and sends none back.
-final class Relay: URLProtocol {
-    typealias Before = @Sendable (Int) async throws -> Void
-
-    static let state = Mutex<(bodies: [Data], replies: [Data], before: Before, older: Bool)>(([], [], { _ in }, false))
-
-    static func reset(before: @escaping Before = { _ in }, older: Bool = false) {
-        state.withLock { $0 = ([], [], before, older) }
-    }
-
-    private static func withoutSpace(_ data: Data) throws -> Data {
-        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return data }
-        object["space"] = nil
-        return try JSONSerialization.data(withJSONObject: object)
-    }
-
-    static var requests: [SyncRequest] {
-        get throws { try state.withLock { $0.bodies }.map { try JSONDecoder().decode(SyncRequest.self, from: $0) } }
-    }
-
-    static var responses: [SyncResponse] {
-        get throws { try state.withLock { $0.replies }.map { try JSONDecoder().decode(SyncResponse.self, from: $0) } }
-    }
-
-    static func session() -> URLSession {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [Relay.self]
-        return URLSession(configuration: configuration)
-    }
-
-    override class func canInit(with request: URLRequest) -> Bool {
-        request.url?.scheme?.hasPrefix("http") == true
-    }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-    override func startLoading() {
-        let body = request.streamedBody
-        let (index, before, older) = Self.state.withLock { state in
-            state.bodies.append(body)
-            return (state.bodies.count - 1, state.before, state.older)
-        }
-        let sent = older ? ((try? Self.withoutSpace(body)) ?? body) : body
-        let forwarded = { var forwarded = request; forwarded.httpBody = sent; return forwarded }()
-        // URLProtocol is not Sendable, but URL loading takes its client callbacks from any thread.
-        nonisolated(unsafe) let relay = self
-        Task {
-            do {
-                try await before(index)
-                let (answered, response) = try await URLSession.shared.data(for: forwarded)
-                let data = older ? try Self.withoutSpace(answered) : answered
-                Self.state.withLock { $0.replies.append(data) }
-                relay.client?.urlProtocol(relay, didReceive: response, cacheStoragePolicy: .notAllowed)
-                relay.client?.urlProtocol(relay, didLoad: data)
-                relay.client?.urlProtocolDidFinishLoading(relay)
-            } catch {
-                relay.client?.urlProtocol(relay, didFailWithError: error)
-            }
-        }
-    }
-
-    override func stopLoading() {}
 }

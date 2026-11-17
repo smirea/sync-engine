@@ -1,16 +1,25 @@
 /**
- * Checks the protocol proofs under the Lean kernel: `bun scripts/spec.ts [--install]`.
- * `--install` fetches the pinned Bend release and Lean toolchain from `spec/toolchain.json` into
+ * Checks that `spec/vectors.json` was generated from the current `spec/sync.bend`, then the protocol proofs under the
+ * Lean kernel: `bun scripts/spec.ts [--install]`. `--install` fetches the pinned Bend release and Lean toolchain from `spec/toolchain.json` into
  * `$BEND_HOME` (default `~/.bend`) and `~/.elan` first, touching no shell profile. CI runs that form.
  */
 import { $ } from 'bun';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { arch, env, exit, platform } from 'node:process';
 import toolchain from '../spec/toolchain.json';
+import type { Vectors } from '../spec/vectors.ts';
 
 const root = join(import.meta.dir, '..');
+const bendSha = createHash('sha256')
+	.update(readFileSync(join(root, 'spec', 'sync.bend')))
+	.digest('hex');
+if ((JSON.parse(readFileSync(join(root, 'spec', 'vectors.json'), 'utf8')) as Vectors).bend_sha256 !== bendSha) {
+	console.error('spec/vectors.json is stale against spec/sync.bend: run `bun run spec-vectors`');
+	exit(1);
+}
 const bendHome = env.BEND_HOME ?? join(homedir(), '.bend');
 const elanBin = join(homedir(), '.elan', 'bin');
 const bend = join(bendHome, 'bin', 'bend');

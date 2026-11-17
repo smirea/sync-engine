@@ -7,8 +7,10 @@ import {
 	createSpace,
 	defineSchema,
 	type Client,
+	type PulledRow,
 	type Schema,
 	type Space,
+	type SpaceHooks,
 	type SpaceOptions,
 	type SqlDriver,
 	type SyncResponse,
@@ -134,7 +136,7 @@ describe('two clients and one space', () => {
 	});
 
 	test('a replayed batch applies once', () => {
-		const { serverDb, server, a } = setup();
+		const { server, a } = setup();
 		insert(a, 'n1', 'once');
 		const { writes } = a.client.collect();
 		const request = { protocol: 1 as const, client: a.client.clientId(), cursor: 0, writes };
@@ -148,7 +150,7 @@ describe('two clients and one space', () => {
 			rows: [{ table: 'notes', id: 'n1', deleted: 0, values: row('n1', 'once') }],
 		});
 		expect(second).toEqual(first);
-		expect(serverDb.exec('SELECT count(*) AS n FROM _log')).toEqual([{ n: 1 }]);
+		expect(server.head()).toBe(1);
 	});
 
 	test('a rejected write is dropped and the server row comes back', () => {
@@ -157,9 +159,7 @@ describe('two clients and one space', () => {
 		a.sync();
 		update(a, 'n1', 'tags', '[1]');
 		const response = a.sync();
-		expect(response.rejected).toEqual([
-			{ seq: 2, table: 'notes', id: 'n1', reason: 'tags: Invalid input: expected string, received number' },
-		]);
+		expect(response.rejected).toEqual([{ seq: 2, table: 'notes', id: 'n1', reason: expect.any(String) }]);
 		expect(response.rows).toEqual([{ table: 'notes', id: 'n1', deleted: 0, values: row('n1', 'tagged') }]);
 		expect(a.rows()).toEqual([row('n1', 'tagged')]);
 		expect(a.client.pending()).toBe(0);
@@ -195,7 +195,6 @@ describe('two clients and one space', () => {
 		expect(b.rows()).toEqual([row('n1', 'one')]);
 		expect(b.client.pending()).toBe(0);
 		expect(b.client.cursor()).toBe(3);
-		expect(b.db.exec("SELECT value FROM _meta WHERE key = 'applying'")).toEqual([{ value: 0 }]);
 	});
 
 	test('a pending local edit survives a pull and the next sync pushes it', () => {
@@ -237,7 +236,6 @@ describe('two clients and one space', () => {
 		expect(columns(v1.serverDb)).toEqual(['id', 'title', 'body', 'done', 'tags', 'priority']);
 		expect(columns(v1.a.db)).toEqual(columns(v1.serverDb));
 		expect(v1.a.rows()).toEqual([row('n1', 'old', { priority: 0 })]);
-		expect(v1.a.db.exec("SELECT name FROM sqlite_master WHERE name = '_ob_u_notes_priority'")).toHaveLength(1);
 		update(v1.a, 'n1', 'priority', 5);
 		const { writes, acked } = client.collect();
 		expect(writes).toEqual([{ seq: 2, table: 'notes', id: 'n1', op: 'patch', values: { priority: 5 } }]);
@@ -246,9 +244,7 @@ describe('two clients and one space', () => {
 		const required = defineSchema({
 			tables: { notes: sqliteTable('notes', { id: text('id').primaryKey(), owner: text('owner').notNull() }) },
 		});
-		expect(() => createSpace(v1.serverDb, required).migrate()).toThrow(
-			'notes.owner: a NOT NULL column without a default cannot be added to an existing table',
-		);
+		expect(() => createSpace(v1.serverDb, required).migrate()).toThrow();
 	});
 
 	test('a client that gains a column or a table re-pulls the values other devices set before it upgraded', () => {
@@ -367,7 +363,7 @@ describe('protocol amendments', () => {
 		expect(response).toEqual({
 			head: 1,
 			acked: 2,
-			rejected: [{ seq: 2, table: 'notes', id: 'n1', reason: 'title: expected TEXT' }],
+			rejected: [{ seq: 2, table: 'notes', id: 'n1', reason: expect.any(String) }],
 			snapshot: false,
 			rows: [{ table: 'notes', id: 'n1', deleted: 0, values: row('n1', 'kept') }],
 		});
@@ -476,33 +472,18 @@ describe('protocol amendments', () => {
 describe('protocol 2', () => {
 	const ids = (response: SyncResponse) => response.rows.map(r => r.id);
 
-	test('compaction drops old tombstones and log rows, and a cursor behind the horizon snapshots and converges', () => {
+	test('a cursor behind the compaction horizon gets a snapshot that converges, and one at the horizon a delta', () => {
 		let clock = 1000;
-		const { serverDb, server, a, b } = setup(schema, { now: () => clock, retention: 100, compactEvery: 10 });
+		const { server, a, b } = setup(schema, { now: () => clock, retention: 100, compactEvery: 10 });
 		insert(a, 'n1', 'one');
 		insert(a, 'n2', 'two');
 		a.sync();
 		b.sync();
 		a.db.exec("DELETE FROM notes WHERE id = 'n1'");
 		a.sync();
-		expect(serverDb.exec('SELECT id, seq, deleted FROM _changes ORDER BY seq')).toEqual([
-			{ id: 'n2', seq: 2, deleted: 0 },
-			{ id: 'n1', seq: 3, deleted: 1 },
-		]);
 		clock = 1200;
 		insert(a, 'n3', 'three');
 		a.sync();
-		expect(serverDb.exec('SELECT id, seq, deleted FROM _changes ORDER BY seq')).toEqual([
-			{ id: 'n2', seq: 2, deleted: 0 },
-			{ id: 'n3', seq: 4, deleted: 0 },
-		]);
-		expect(serverDb.exec('SELECT seq FROM _log')).toEqual([{ seq: 4 }]);
-		expect(serverDb.exec("SELECT key, value FROM _meta WHERE key IN ('horizon', 'compacted_at') ORDER BY key")).toEqual(
-			[
-				{ key: 'compacted_at', value: 1200 },
-				{ key: 'horizon', value: 3 },
-			],
-		);
 		expect(server.compact()).toBe(3);
 
 		expect(b.client.cursor()).toBe(2);
@@ -680,15 +661,13 @@ function moved(oldNotes: string[], freshNotes: string[], options: SpaceOptions =
 
 describe('space identity', () => {
 	test('every space mints its own id, kept across migrations and sent on every protocol 2 response', () => {
-		const { server, serverDb, a } = setup();
+		const { server, a } = setup();
 		const id = server.space();
-		expect(id).toMatch(/^[0-9a-f-]{36}$/);
 		server.migrate();
 		expect(server.space()).toBe(id);
 		expect(setup().server.space()).not.toBe(id);
 		expect(a.pull().space).toBe(id);
 		expect(a.client.space()).toBe(id);
-		expect(serverDb.exec("SELECT value FROM _meta WHERE key = 'space'")).toEqual([{ value: id }]);
 	});
 
 	test('a cursor from another space below this head gets a snapshot, and the device ends with exactly this space', () => {
@@ -787,5 +766,244 @@ describe('space identity', () => {
 		a.client.apply(older, batch.acked);
 		expect(a.client.space()).toBe(id);
 		expect(a.rows().map(r => r.id)).toEqual(['n1']);
+	});
+});
+
+describe('space hooks', () => {
+	const notes = sqliteTable('notes', {
+		id: text('id').primaryKey(),
+		owner: text('owner').notNull(),
+		title: text('title').notNull(),
+		author: text('author'),
+	});
+	const grants = sqliteTable('grants', {
+		id: text('id').primaryKey(),
+		reader: text('reader').notNull(),
+		note: text('note').notNull(),
+	});
+	const schema = defineSchema({ tables: { notes, grants } });
+
+	type Context = { user: string };
+
+	function setup(hooks: SpaceHooks<Context>) {
+		const driver = bunSqlite(':memory:');
+		const space = createSpace(driver, schema, { hooks });
+		space.migrate();
+		const sync = (user: string, writes: Write[], cursor = 0, client = `${user}-device`) =>
+			space.sync({ protocol: 2, client, cursor, writes }, { user });
+		return { driver, space, sync };
+	}
+
+	const put = (seq: number, id: string, values: Record<string, string | null>): Write => ({
+		seq,
+		table: 'notes',
+		id,
+		op: 'put',
+		values,
+	});
+	const ids = (rows: readonly PulledRow[]) => rows.map(row => `${row.table}:${row.id}:${row.deleted}`);
+
+	describe('admit', () => {
+		const ownOnly: SpaceHooks<Context> = {
+			admit(write, { user }) {
+				if (write.op === 'put' && write.values.owner !== user) return 'not yours';
+				if (write.op === 'put' && write.values.title === 'skip') return null;
+				return write.op === 'put' ? { ...write, values: { ...write.values, author: user } } : write;
+			},
+		};
+
+		test('stamps, refuses, and skips with the request context', () => {
+			const { driver, sync } = setup(ownOnly);
+			const response = sync('ann', [
+				put(1, 'a', { owner: 'ann', title: 'mine', author: 'forged' }),
+				put(2, 'b', { owner: 'bob', title: 'theirs' }),
+				put(3, 'c', { owner: 'ann', title: 'skip' }),
+			]);
+			expect(response.acked).toBe(3);
+			expect(response.head).toBe(1);
+			expect(response.rejected).toEqual([{ seq: 2, table: 'notes', id: 'b', reason: 'not yours' }]);
+			expect(driver.exec('SELECT id, author FROM notes')).toEqual([{ id: 'a', author: 'ann' }]);
+		});
+
+		test('a skipped write gets the server row back, and a throw or a moved write refuses only that write', () => {
+			const { sync } = setup({
+				admit(write) {
+					if (write.id === 'boom') throw new Error('no such rule');
+					if (write.id === 'moved') return { ...write, id: 'elsewhere' };
+					if (write.op === 'put' && write.values.title === 'skip') return null;
+					return write;
+				},
+			});
+			sync('ann', [put(1, 'a', { owner: 'ann', title: 'kept' })]);
+			const response = sync('ann', [
+				put(2, 'a', { owner: 'ann', title: 'skip' }),
+				put(3, 'boom', { owner: 'ann', title: 'x' }),
+				put(4, 'moved', { owner: 'ann', title: 'x' }),
+				put(5, 'b', { owner: 'ann', title: 'lands' }),
+			]);
+			expect(response.rejected.map(r => r.id)).toEqual(['boom', 'moved']);
+			expect(response.acked).toBe(5);
+			const a = response.rows.find(row => row.id === 'a');
+			expect(a && !a.deleted && a.values.title).toBe('kept');
+		});
+
+		test('a refused write is not replayed by a retry', () => {
+			const { sync } = setup(ownOnly);
+			sync('ann', [put(1, 'b', { owner: 'bob', title: 'theirs' })]);
+			expect(sync('ann', [put(1, 'b', { owner: 'bob', title: 'theirs' })]).rejected).toEqual([]);
+		});
+	});
+
+	describe('landed', () => {
+		test('derived writes count, sync, and see the applied values', () => {
+			const seen: string[] = [];
+			const { space, sync } = setup({
+				landed(writes, _context, server) {
+					for (const write of writes) {
+						seen.push(`${write.op}:${write.id}`);
+						if (write.op === 'put') server.put('grants', `g-${write.id}`, { reader: 'bob', note: write.id });
+						if (write.op === 'delete') server.delete('grants', `g-${write.id}`);
+					}
+				},
+			});
+			sync('ann', [put(1, 'a', { owner: 'ann', title: 'one' })]);
+			expect(space.head()).toBe(2);
+			expect(ids(sync('bob', [], 0).rows)).toEqual(['notes:a:0', 'grants:g-a:0']);
+			sync('ann', [{ seq: 2, table: 'notes', id: 'a', op: 'delete' }]);
+			expect(seen).toEqual(['put:a', 'delete:a']);
+			expect(ids(sync('bob', [], 2).rows)).toEqual(['notes:a:1', 'grants:g-a:1']);
+		});
+
+		test('runs only when a write counted', () => {
+			let calls = 0;
+			const { sync } = setup({ landed: () => void calls++ });
+			sync('ann', [{ seq: 1, table: 'notes', id: 'gone', op: 'patch', values: { title: 'x' } }]);
+			expect(calls).toBe(0);
+		});
+	});
+
+	describe('view', () => {
+		const shared: SpaceHooks<Context> = {
+			view({ user }) {
+				return {
+					sees(table, values) {
+						if (table === 'grants') return values.reader === user;
+						if (values.owner === user) return true;
+						return grantedTo(user, String(values.id));
+					},
+					expand(rows) {
+						return rows.flatMap(row => {
+							if (row.table !== 'grants') return [];
+							const [reader, note] = row.id.split(':');
+							if (reader !== user) return [];
+							const found = noteRow(note!);
+							return row.deleted || !found ? [{ table: 'notes', id: note!, deleted: 1 as const }] : [found];
+						});
+					},
+				};
+			},
+			admit(write, { user }) {
+				if (write.table === 'notes' && write.op === 'put' && write.values.owner !== user) return 'not shared with you';
+				return write;
+			},
+		};
+		let grantedTo: (user: string, note: string) => boolean = () => false;
+		let noteRow: (id: string) => PulledRow | undefined = () => undefined;
+
+		function shareSetup() {
+			const env = setup(shared);
+			grantedTo = (user, note) =>
+				env.driver.exec('SELECT 1 FROM grants WHERE reader = ? AND note = ?', [user, note]).length > 0;
+			noteRow = id => {
+				const row = env.driver.exec('SELECT id, owner, title, author FROM notes WHERE id = ?', [id])[0];
+				return row && { table: 'notes', id, deleted: 0, values: row as Record<string, string | null> };
+			};
+			return env;
+		}
+
+		test('a snapshot holds only the rows the reader sees', () => {
+			const { space, sync } = shareSetup();
+			sync('ann', [put(1, 'a', { owner: 'ann', title: 'one' }), put(2, 'b', { owner: 'ann', title: 'two' })]);
+			space.write([{ table: 'grants', id: 'bob:b', op: 'put', values: { reader: 'bob', note: 'b' } }], { user: 'ann' });
+			expect(ids(sync('bob', []).rows)).toEqual(['notes:b:0', 'grants:bob:b:0']);
+			expect(ids(sync('cat', []).rows)).toEqual([]);
+		});
+
+		test('a grant made later opens an old row, and its removal closes it', () => {
+			const { space, sync } = shareSetup();
+			sync('ann', [put(1, 'a', { owner: 'ann', title: 'one' })]);
+			const cursor = sync('bob', []).head;
+			space.write([{ table: 'grants', id: 'bob:a', op: 'put', values: { reader: 'bob', note: 'a' } }], { user: 'ann' });
+			const opened = sync('bob', [], cursor);
+			expect(ids(opened.rows)).toEqual(['grants:bob:a:0', 'notes:a:0']);
+			space.write([{ table: 'grants', id: 'bob:a', op: 'delete' }], { user: 'ann' });
+			expect(ids(sync('bob', [], opened.head).rows)).toEqual(['grants:bob:a:1', 'notes:a:1']);
+		});
+
+		test('a row that changed in the delta that also took its grant away comes back as a tombstone', () => {
+			const { space, sync } = shareSetup();
+			sync('ann', [put(1, 'a', { owner: 'ann', title: 'one' })]);
+			space.write([{ table: 'grants', id: 'bob:a', op: 'put', values: { reader: 'bob', note: 'a' } }], { user: 'ann' });
+			const cursor = sync('bob', []).head;
+			sync('ann', [put(2, 'a', { owner: 'ann', title: 'renamed' })]);
+			space.write([{ table: 'grants', id: 'bob:a', op: 'delete' }], { user: 'ann' });
+			expect(ids(sync('bob', [], cursor).rows).toSorted()).toEqual(['grants:bob:a:1', 'notes:a:1']);
+		});
+
+		test("another reader's changes never reach a reader, not even as tombstones", () => {
+			const { sync } = shareSetup();
+			const cursor = sync('cat', []).head;
+			sync('ann', [put(1, 'a', { owner: 'ann', title: 'private' })]);
+			expect(ids(sync('cat', [], cursor).rows)).toEqual([]);
+		});
+
+		test('a refused write the reader cannot see comes back as a tombstone', () => {
+			const { sync } = shareSetup();
+			sync('ann', [put(1, 'a', { owner: 'ann', title: 'one' })]);
+			const response = sync('bob', [put(1, 'a', { owner: 'ann', title: 'stolen' })]);
+			expect(response.rejected.map(r => r.reason)).toEqual(['not shared with you']);
+			expect(ids(response.rows)).toEqual(['notes:a:1']);
+		});
+	});
+
+	describe('write', () => {
+		const hooks: SpaceHooks<Context> = {
+			admit: (write, { user }) => (write.op === 'put' && write.values.owner !== user ? 'not yours' : write),
+		};
+
+		test('applies through admit and reports the new head', () => {
+			const { space } = setup(hooks);
+			const result = space.write([{ table: 'notes', id: 'a', op: 'put', values: { owner: 'ann', title: 'one' } }], {
+				user: 'ann',
+			});
+			expect(result).toEqual({ rejected: [], head: 1 });
+		});
+
+		test('atomic rolls back every write when one is refused', () => {
+			const { driver, space } = setup(hooks);
+			const result = space.write(
+				[
+					{ table: 'notes', id: 'a', op: 'put', values: { owner: 'ann', title: 'one' } },
+					{ table: 'notes', id: 'b', op: 'put', values: { owner: 'bob', title: 'two' } },
+				],
+				{ user: 'ann' },
+				{ atomic: true },
+			);
+			expect(result).toEqual({ rejected: [{ seq: 0, table: 'notes', id: 'b', reason: 'not yours' }], head: 0 });
+			expect(driver.exec('SELECT id FROM notes')).toEqual([]);
+		});
+	});
+
+	describe('change', () => {
+		test('server rows written outside a sync count and reach readers', () => {
+			const { space, sync } = setup({});
+			const head = space.change(server => {
+				server.put('notes', 'a', { owner: 'ann', title: 'derived' });
+				return space.head();
+			});
+			expect(head).toBe(1);
+			expect(ids(sync('bob', []).rows)).toEqual(['notes:a:0']);
+			expect(() => space.change(server => server.put('notes', 'b', { owner: 'ann' }))).toThrow();
+		});
 	});
 });

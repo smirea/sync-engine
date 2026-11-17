@@ -14,12 +14,10 @@ const paths = (full ? [] : (await $`git diff --name-only -z ${comparison}`.text(
 const common = full || paths.some(name => name.startsWith('.github/'));
 const isSwift = (name: string) => name === 'Package.swift' || name.startsWith('Sources/') || name.startsWith('Tests/');
 const bun = kind !== 'empty' && (common || paths.some(name => !isSwift(name)));
-// The Swift tests run against the Bun server in Tests/server.ts, so a server change reruns them.
-const serves = (name: string) => /^packages\/(core|bun-sqlite|bun-server)\/src\//.test(name);
-const swift = common || paths.some(name => isSwift(name) || serves(name));
+const swift = common || paths.some(isSwift);
 
 const spec = common || paths.some(name => name.startsWith('spec/') || name === 'scripts/spec.ts');
-const web =
-	common || paths.some(name => name.startsWith('packages/client-web/') || name.startsWith('packages/client/'));
+// The browser suite runs nowhere else, so every package it loads reruns it.
+const web = common || paths.some(name => /^packages\/(client-web|client|core|bun-sqlite|bun-server)\//.test(name));
 
 appendFileSync(output, `bun=${bun}\nswift=${swift}\nspec=${spec}\nweb=${web}\n`);

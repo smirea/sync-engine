@@ -11,6 +11,7 @@ Full rules in [`docs/decisions/workflow.md`](docs/decisions/workflow.md).
 - After opening a PR, run `pr-ship [--merge]` (shared, from `~/code/scripts`) in the foreground until it exits 0. Its exit code names the next step.
 - Never skip git hooks. Fix the failure instead.
 - Run only the relevant tests locally; CI runs the full suite.
+- `packages/client-web/web.test.ts` is the browser-runtime exception the `tests` skill allows: sync logic that runs only in a page, a worker and OPFS. It never drives UI, never runs in a hook, and runs as its own CI job (`bun run test:web`).
 - After a PR merges, bump the sync-engine pin in every repo that depends on it (today `a-better-me`: `bun.lock` and `Package.resolved`). Commit the bump straight to that repo's `master`; open a PR there only when the merge broke the protocol, an API or a schema consumers use.
 
 # Stack

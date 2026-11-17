@@ -1,7 +1,7 @@
 /**
  * Builds the Bend model to `spec/sync.mjs`, drives seeded scenarios through it and writes `spec/vectors.json`, the
  * contract `packages/core/spec.test.ts` replays through the SQL core. Run with `bun run spec-vectors` after any change
- * to `spec/sync.bend`; the test fails on a stale `bend_sha256`.
+ * to `spec/sync.bend`; `bun run spec` fails on a stale `bend_sha256`.
  */
 import { $ } from 'bun';
 import { createHash } from 'node:crypto';

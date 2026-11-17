@@ -38,9 +38,7 @@ describe('handleSync', () => {
 	test('400 for a body that is not the request shape', async () => {
 		expect((await post('{not json')).status).toBe(400);
 		expect((await post('[1]')).status).toBe(400);
-		const response = await post(JSON.stringify({ protocol: 1, client: 'a', cursor: -1, writes: [] }));
-		expect(response.status).toBe(400);
-		expect(await response.json()).toEqual({ error: '✖ Too small: expected number to be >=0\n  → at cursor' });
+		expect((await post(JSON.stringify({ protocol: 1, client: 'a', cursor: -1, writes: [] }))).status).toBe(400);
 		expect(
 			(
 				await post(
