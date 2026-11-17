@@ -1,7 +1,8 @@
 /**
  * Runs the unit tests related to the files lefthook passes in: every `*.test.ts(x)` whose imports reach a changed
  * file, followed through the import graph. Imports resolve the way Bun resolves them, so tsconfig paths count;
- * anything that lands in node_modules does not.
+ * anything that lands in node_modules does not. The browser suite in `packages/client-web` is never picked: it runs
+ * only in its own CI job, since nothing in a hook may start a browser.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
@@ -11,6 +12,7 @@ const root = realpathSync(join(import.meta.dir, '..'));
 const SOURCE = /\.(ts|tsx|mts)$/;
 const TEST = /\.test\.tsx?$/;
 const SKIP = new Set(['node_modules', 'dist', 'build', 'generated']);
+const BROWSER = join(root, 'packages', 'client-web') + '/';
 
 const files = process.argv
 	.slice(2)
@@ -59,7 +61,7 @@ for (let i = 0; i < queue.length; i++) {
 	}
 }
 
-const selected = [...seen].filter(file => TEST.test(file) && existsSync(file));
+const selected = [...seen].filter(file => TEST.test(file) && !file.startsWith(BROWSER) && existsSync(file));
 if (selected.length > 0) {
 	const result = spawnSync('bun', ['test', ...selected.toSorted()], { cwd: root, stdio: 'inherit' });
 	process.exit(result.status ?? 1);
