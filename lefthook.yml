@@ -10,15 +10,15 @@ pre-commit:
     typecheck:
       glob: '*.{js,mjs,mts,ts,tsx,json,jsonc}'
       run: bun check
+    # The whole suite: it runs in-process in milliseconds, so selecting by diff would save nothing and could miss a
+    # test whose input is not an import, such as spec/vectors.json. Git exports GIT_DIR and GIT_INDEX_FILE to hooks,
+    # so a test that runs git in a temp directory would act on this repository unless they are unset first.
     test:
-      glob: '*.{js,mjs,mts,ts,tsx}'
-      run: bun --no-env-file scripts/test-changed.ts {staged_files}
+      glob: '*.{js,mjs,mts,ts,tsx,json}'
+      run: unset $(git rev-parse --local-env-vars); bun run test
+    swift:
+      glob: '{Package.swift,Sources/**,Tests/**}'
+      run: unset $(git rev-parse --local-env-vars); swift test
     spec:
       glob: 'spec/*'
       run: bun scripts/spec.ts
-
-pre-push:
-  commands:
-    test:
-      glob: '*.{js,mjs,mts,ts,tsx}'
-      run: bun --no-env-file scripts/test-changed.ts {push_files}
