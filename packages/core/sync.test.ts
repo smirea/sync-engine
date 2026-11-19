@@ -8,6 +8,7 @@ import {
 	defineSchema,
 	type Client,
 	type PulledRow,
+	type Row,
 	type Schema,
 	type Space,
 	type SpaceHooks,
@@ -28,19 +29,12 @@ const schema = defineSchema({ tables: { notes }, values: { notes: { tags: z.arra
 
 function syncPages(server: Space, client: Client, batch = client.collect()): SyncResponse {
 	let response: SyncResponse;
+	let more: boolean;
 	do {
-		const progress = client.snapshot();
-		response = server.sync({
-			protocol: 2,
-			client: client.clientId(),
-			cursor: client.cursor(),
-			writes: batch.writes,
-			...(progress ? { after: progress.after } : {}),
-			space: client.space(),
-		});
-		client.apply(response, batch.acked);
+		response = server.sync(client.request(batch.writes));
+		({ more } = client.apply(response, batch.acked));
 		batch = { writes: [], acked: 0 };
-	} while (client.snapshot());
+	} while (more);
 	return response;
 }
 
@@ -429,7 +423,7 @@ describe('protocol amendments', () => {
 				cursor: peer.client.cursor(),
 				writes: batch.writes,
 			});
-			return { rows: response.rows.map(r => r.id), touched: [...peer.client.apply(response, batch.acked)] };
+			return { rows: response.rows.map(r => r.id), touched: [...peer.client.apply(response, batch.acked).tables] };
 		};
 		insert(b, 'n1', 'from b');
 		b.sync();
@@ -630,6 +624,292 @@ describe('protocol 2', () => {
 	});
 });
 
+/** Applies one response at a time, so a test can look between pages. */
+function step(server: Space, client: Client, batch = { writes: [] as Write[], acked: 0 }) {
+	const request = client.request(batch.writes);
+	const response = server.sync(request);
+	const applied = client.apply(response, batch.acked);
+	return { request, response, touched: [...applied.tables], more: applied.more };
+}
+
+describe('a snapshot keeps what it does not change', () => {
+	/** `b` holds n1 to n5 at a cursor compaction has passed, so its next pull is a snapshot in pages of two. */
+	function behindTheHorizon(drop: (a: Peer) => void) {
+		let clock = 1000;
+		const peers = setup(schema, { pageSize: 2, now: () => clock, retention: 100, compactEvery: 10 });
+		const { server, a, b } = peers;
+		for (let i = 1; i <= 5; i++) insert(a, `n${i}`, `note ${i}`);
+		a.sync();
+		b.pull();
+		drop(a);
+		a.sync();
+		clock = 1200;
+		server.compact();
+		return peers;
+	}
+	const noteIds = (peer: Peer) => peer.rows().map(r => r.id);
+
+	test('a snapshot of rows the client already holds changes no table, on any page', () => {
+		const { server, b } = behindTheHorizon(a => {
+			insert(a, 'n9', 'never reached b');
+			a.db.exec("DELETE FROM notes WHERE id = 'n9'");
+		});
+		const before = b.rows();
+		const pages = [step(server, b.client), step(server, b.client), step(server, b.client)];
+		expect(pages.map(page => [page.response.snapshot, page.touched, page.more])).toEqual([
+			[true, [], true],
+			[true, [], true],
+			[true, [], false],
+		]);
+		expect(b.rows()).toEqual(before);
+		expect(b.client.cursor()).toBe(server.head());
+	});
+
+	test('rows the server dropped go only when the last page lands, and a row with a pending write stays', () => {
+		const { server, b } = behindTheHorizon(a => a.db.exec("DELETE FROM notes WHERE id IN ('n1', 'n4')"));
+		insert(b, 'n0', 'offline on b');
+		update(b, 'n4', 'title', 'edited offline on b');
+
+		expect(step(server, b.client).touched).toEqual([]);
+		expect(noteIds(b)).toEqual(['n0', 'n1', 'n2', 'n3', 'n4', 'n5']);
+		const last = step(server, b.client);
+		expect({ more: last.more, touched: last.touched }).toEqual({ more: false, touched: ['notes'] });
+		expect(noteIds(b)).toEqual(['n0', 'n2', 'n3', 'n4', 'n5']);
+
+		b.sync();
+		expect(noteIds(b)).toEqual(['n0', 'n2', 'n3', 'n5']);
+		expect(b.rows()).toEqual(server.dump().notes!);
+	});
+
+	test('a row pushed while a snapshot is paging stays when its last page lands', () => {
+		const { server, a, b } = setup(schema, { pageSize: 2 });
+		for (let i = 3; i <= 6; i++) insert(a, `n${i}`, `note ${i}`);
+		a.sync();
+		expect(step(server, b.client).request).toMatchObject({ cursor: 0 });
+		expect(b.client.snapshot()?.after).toEqual({ table: 'notes', id: 'n4' });
+
+		insert(b, 'n1', 'sorts before the pages already taken');
+		syncPages(server, b.client);
+		expect(noteIds(b)).toEqual(['n1', 'n3', 'n4', 'n5', 'n6']);
+		expect(server.dump().notes!.map(r => r.id)).toEqual(['n1', 'n3', 'n4', 'n5', 'n6']);
+	});
+
+	test('a put that landed in a lost response and was deleted by another device goes with the snapshot', () => {
+		const { server, a, b } = setup();
+		insert(b, 'n1', 'lands, but b never hears');
+		const batch = b.client.collect();
+		server.sync(b.client.request(batch.writes));
+		a.pull();
+		a.db.exec("DELETE FROM notes WHERE id = 'n1'");
+		a.sync();
+
+		// A server from before replays were answered with a row acks the retry and says nothing about n1.
+		const retry = { ...server.sync(b.client.request(batch.writes)), rows: [] };
+		expect({ snapshot: retry.snapshot, acked: retry.acked }).toEqual({ snapshot: true, acked: 1 });
+		b.client.apply(retry, batch.acked);
+		expect(b.rows()).toEqual([]);
+		expect(b.client.pending()).toBe(0);
+	});
+
+	test('an edit of a row the server dropped is undone even when the response that said so was lost', () => {
+		const { server, b } = behindTheHorizon(a => a.db.exec("DELETE FROM notes WHERE id = 'n4'"));
+		update(b, 'n4', 'title', 'edited while the snapshot still showed it');
+		b.pull();
+		expect(noteIds(b)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5']);
+
+		const lost = server.sync(b.client.request(b.client.collect().writes));
+		expect(lost.rows).toEqual([{ table: 'notes', id: 'n4', deleted: 1 }]);
+		const retry = b.sync();
+		expect({ acked: retry.acked, rows: retry.rows }).toEqual({ acked: lost.acked, rows: lost.rows });
+		expect(b.rows()).toEqual(server.dump().notes!);
+	});
+
+	test('pages another engine version applied are not trusted: the snapshot starts over', () => {
+		const { server, a, b } = setup(schema, { pageSize: 2 });
+		for (let i = 1; i <= 5; i++) insert(a, `n${i}`, `note ${i}`);
+		a.sync();
+		step(server, b.client);
+		// What a build from before `_seen` leaves after it applied the next page: `after` moved, `_seen` did not.
+		b.db.exec(`UPDATE _meta SET value = '{"table":"notes","id":"n4"}' WHERE key = 'after'`);
+
+		const updated = createClient(b.db, schema);
+		updated.migrate();
+		expect(updated.request([])).toMatchObject({ cursor: 0 });
+		expect(updated.snapshot()).toBeNull();
+		syncPages(server, updated);
+		expect(noteIds(b)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5']);
+	});
+});
+
+describe('refresh', () => {
+	const labelColumns = { id: text('id').primaryKey(), name: text('name').notNull() };
+	const before = defineSchema({ tables: { notes, labels: sqliteTable('labels', labelColumns) } });
+	const after = defineSchema({
+		tables: {
+			notes,
+			labels: sqliteTable('labels', { ...labelColumns, color: text('color') }),
+			items: sqliteTable('items', { id: text('id').primaryKey(), name: text('name').notNull() }),
+		},
+	});
+	const keys = (response: SyncResponse) => response.rows.map(r => `${r.table}/${r.id}`);
+
+	/**
+	 * `b` synced under the schema before `labels` gained `color` and `items` existed, pulled past the values `a` set in
+	 * them, and has just migrated to the schema that has both.
+	 */
+	function grown(options: SpaceOptions = {}) {
+		const old = setup(before, options);
+		for (let i = 1; i <= 3; i++) insert(old.a, `n${i}`, `note ${i}`);
+		old.a.db.exec("INSERT INTO labels (id, name) VALUES ('l1', 'home'), ('l2', 'work'), ('l3', 'idea')");
+		old.a.sync();
+		old.b.pull();
+
+		const server = createSpace(old.serverDb, after, options);
+		server.migrate();
+		const a = createClient(old.a.db, after);
+		a.migrate();
+		old.a.db.exec("UPDATE labels SET color = 'red' WHERE id = 'l1'");
+		old.a.db.exec("INSERT INTO items (id, name) VALUES ('i1', 'lamp')");
+		syncPages(server, a);
+		syncPages(server, old.b.client);
+
+		const b = createClient(old.b.db, after);
+		b.migrate();
+		const local = (): Record<string, Row[]> => ({
+			notes: old.b.db.exec('SELECT * FROM notes ORDER BY id'),
+			labels: old.b.db.exec('SELECT * FROM labels ORDER BY id'),
+			items: old.b.db.exec('SELECT * FROM items ORDER BY id'),
+		});
+		return { server, a: { ...old.a, client: a }, b: { db: old.b.db, client: b, local } };
+	}
+
+	test('a client whose schema grew pulls the grown tables whole, across a restart, then the rest as a delta', () => {
+		const { server, a, b } = grown({ pageSize: 2 });
+		const cursor = b.client.cursor();
+		expect(cursor).toBeGreaterThan(0);
+		expect(b.client.refresh()).toEqual({ tables: ['labels', 'items'] });
+		update(a, 'n2', 'title', 'edited after b last pulled');
+		syncPages(server, a.client);
+
+		const first = step(server, b.client);
+		const restarted = createClient(b.db, after);
+		restarted.migrate();
+		const rest = [step(server, restarted), step(server, restarted)];
+		expect(
+			[first, ...rest].map(({ request, response, more }) => ({
+				cursor: request.cursor,
+				asked: request.refresh ?? null,
+				tables: response.tables ?? null,
+				rows: keys(response),
+				more,
+			})),
+		).toEqual([
+			{
+				cursor,
+				asked: { tables: ['labels', 'items'] },
+				tables: ['labels', 'items'],
+				rows: ['labels/l1', 'labels/l2'],
+				more: true,
+			},
+			{
+				cursor,
+				asked: { tables: ['labels', 'items'], after: { table: 'labels', id: 'l2' } },
+				tables: ['labels', 'items'],
+				rows: ['labels/l3', 'items/i1'],
+				more: true,
+			},
+			{ cursor, asked: null, tables: null, rows: ['notes/n2'], more: false },
+		]);
+		expect(b.local()).toEqual(server.dump());
+		expect(restarted.cursor()).toBe(server.head());
+		expect(restarted.refresh()).toBeNull();
+	});
+
+	test('a server older than refresh answers a delta, and the client takes a full snapshot instead', () => {
+		const { server, b } = grown();
+		const kinds: boolean[] = [];
+		let more = true;
+		while (more) {
+			// A server from before refresh drops the request's `refresh` as an unknown key.
+			const { refresh: _dropped, ...request } = b.client.request([]);
+			const response = server.sync(request);
+			kinds.push(response.snapshot);
+			({ more } = b.client.apply(response, 0));
+		}
+		expect(kinds).toEqual([false, true]);
+		expect(b.local()).toEqual(server.dump());
+		expect(b.client.refresh()).toBeNull();
+		expect(b.client.cursor()).toBe(server.head());
+	});
+
+	test('a refresh whose cursor another engine version moved starts its pages over', () => {
+		const { server, b } = grown({ pageSize: 2 });
+		step(server, b.client);
+		expect(b.client.refresh()).toMatchObject({ after: { table: 'labels', id: 'l2' } });
+		// A build from before refresh ignores `_meta.refresh` and pulls a delta, which moves the cursor.
+		b.db.exec("UPDATE _meta SET value = value + 1 WHERE key = 'cursor'");
+
+		const updated = createClient(b.db, after);
+		updated.migrate();
+		expect(updated.refresh()).toEqual({ tables: ['labels', 'items'] });
+	});
+
+	test('a refresh holds only the named tables the server has', () => {
+		const { server, b } = grown();
+		const response = server.sync({ ...b.client.request([]), refresh: { tables: ['unknown', 'items', 'labels'] } });
+		expect({ snapshot: response.snapshot, tables: response.tables, rows: keys(response), next: response.next }).toEqual(
+			{
+				snapshot: true,
+				tables: ['labels', 'items'],
+				rows: ['labels/l1', 'labels/l2', 'labels/l3', 'items/i1'],
+				next: null,
+			},
+		);
+	});
+
+	test('a cursor that needs a full snapshot gets it from the first page, whatever refresh it asks for', () => {
+		let clock = 1000;
+		const { server, a, b } = grown({ pageSize: 2, now: () => clock, retention: 100, compactEvery: 10 });
+		expect(step(server, b.client).response.tables).toEqual(['labels', 'items']);
+		a.db.exec("DELETE FROM notes WHERE id = 'n1'");
+		syncPages(server, a.client);
+		clock = 1200;
+		server.compact();
+
+		const page = step(server, b.client);
+		expect(page.request).toMatchObject({ refresh: { after: { table: 'labels', id: 'l2' } } });
+		expect({ tables: page.response.tables, rows: keys(page.response) }).toEqual({
+			tables: undefined,
+			rows: ['notes/n2', 'notes/n3'],
+		});
+		expect(b.client.refresh()).toBeNull();
+		syncPages(server, b.client, { writes: [], acked: 0 });
+		expect(b.local()).toEqual(server.dump());
+	});
+
+	test('the last page of a refresh removes the rows its tables no longer hold and leaves every other table alone', () => {
+		const { server, b } = grown();
+		const cursor = b.client.cursor();
+		const { tables, more } = b.client.apply(
+			{
+				head: server.head() + 5,
+				acked: 0,
+				rejected: [],
+				snapshot: true,
+				tables: ['labels'],
+				rows: [{ table: 'labels', id: 'l2', deleted: 0, values: { id: 'l2', name: 'work', color: null } }],
+				next: null,
+				space: server.space(),
+			},
+			0,
+		);
+		expect({ tables: [...tables], more }).toEqual({ tables: ['labels'], more: true });
+		expect(b.local().labels!.map(r => r.id)).toEqual(['l2']);
+		expect(b.local().notes!.map(r => r.id)).toEqual(['n1', 'n2', 'n3']);
+		expect(b.client.cursor()).toBe(cursor);
+	});
+});
+
 describe('reset', () => {
 	test('empties the tables and the outbox, captures nothing, and starts over under a new client id', () => {
 		const { a } = setup();
@@ -702,7 +982,7 @@ describe('space identity', () => {
 		});
 	});
 
-	test('a paged snapshot interrupted by a space change restarts from the first page and wipes', () => {
+	test('a paged snapshot interrupted by a space change restarts from the first page and ends with only the new rows', () => {
 		const { device, fresh } = moved([], ['f1', 'f2', 'f3'], { pageSize: 2 });
 		const old = setup(schema, { pageSize: 2 });
 		for (const id of ['o1', 'o2', 'o3']) insert(old.a, id, id);

@@ -46,6 +46,12 @@ struct After: Codable, Equatable, Sendable {
     let id: String
 }
 
+/// The tables to pull whole again after the schema grew them, and where the next page of them starts.
+struct Refresh: Codable, Equatable, Sendable {
+    let tables: [String]
+    var after: After? = nil
+}
+
 struct SyncRequest: Codable, Sendable {
     let `protocol`: Int
     let client: String
@@ -54,6 +60,7 @@ struct SyncRequest: Codable, Sendable {
     let after: After?
     /// The space the cursor came from, empty before the first response that names one.
     let space: String
+    var refresh: Refresh? = nil
 }
 
 struct RejectedWrite: Codable, Equatable, Sendable {
@@ -79,6 +86,8 @@ struct SyncResponse: Codable, Equatable, Sendable {
     let next: After?
     /// Servers older than spaces leave it out.
     var space: String? = nil
+    /// Only on the answer to a refresh: the tables this snapshot holds.
+    var tables: [String]? = nil
 }
 
 struct LiveMessage: Codable, Sendable {

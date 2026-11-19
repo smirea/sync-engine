@@ -18,6 +18,8 @@ export type Write =
 
 /** The last row of a snapshot page, by schema table order then id; the next page starts after it. */
 export type After = { table: string; id: string };
+/** The tables a client pulls whole again after its schema grew them, and where the next page of them starts. */
+export type Refresh = { tables: string[]; after?: After };
 export type SyncRequest =
 	| { protocol: 1; client: string; cursor: number; writes: Write[] }
 	| {
@@ -28,6 +30,8 @@ export type SyncRequest =
 			after?: After;
 			/** The space the cursor came from, `''` when the client has none yet. Left out by clients older than spaces. */
 			space?: string;
+			/** Left out by clients older than refresh, and ignored when the cursor gets a full snapshot anyway. */
+			refresh?: Refresh;
 	  };
 export type Rejected = { seq: number; table: string; id: string; reason: string };
 export type PulledRow =
@@ -43,6 +47,8 @@ export type SyncResponse = {
 	next?: After | null;
 	/** The id this space minted when it was created. Servers older than spaces leave it out. */
 	space?: string;
+	/** Only on the answer to a refresh: the tables this snapshot holds, which are the requested ones the server has. */
+	tables?: string[];
 };
 
 export type StorageClass = 'TEXT' | 'INTEGER' | 'REAL';

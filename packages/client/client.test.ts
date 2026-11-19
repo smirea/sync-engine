@@ -164,7 +164,7 @@ describe('createSyncClient', () => {
 			next: null,
 			head: 5,
 		});
-		expect(await changed).toEqual(new Set(['notes', 'tags']));
+		expect(await changed).toEqual(new Set(['notes']));
 		expect(c.rows().map(r => r.id)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5']);
 		expect(c.client.status()).toMatchObject({ syncing: false, pending: 0, cursor: 5, snapshot: null });
 	});
@@ -300,7 +300,7 @@ describe('createSyncClient', () => {
 		await a.client.sync();
 		const changed = b.nextChange();
 		live.created[0]!.message(JSON.stringify({ head: 1 }));
-		expect(await changed).toEqual(new Set(['notes', 'tags']));
+		expect(await changed).toEqual(new Set(['notes']));
 		expect(b.rows()).toEqual([{ id: 'n1', title: 'live', done: 0 }]);
 	});
 
@@ -315,7 +315,7 @@ describe('createSyncClient', () => {
 		b.client.start();
 		const changed = b.nextChange();
 		jest.advanceTimersByTime(250);
-		expect(await changed).toEqual(new Set(['notes', 'tags']));
+		expect(await changed).toEqual(new Set(['notes']));
 		expect(b.rows()).toEqual([{ id: 'n1', title: 'while dead', done: 0 }]);
 		expect(b.client.status().live).toBe(false);
 	});

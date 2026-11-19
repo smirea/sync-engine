@@ -2,13 +2,13 @@
 
 The exact shapes every implementation shares: the TypeScript core and clients, the Swift client, and the Bend model in `spec/`. The decisions behind them are in [`decisions/sync.md`](decisions/sync.md).
 
-Protocol 2 adds horizon compaction on the server and paged snapshots. A server accepts protocol 1 and protocol 2 for one release; see [Protocol 1](#protocol-1) for what a v1 request gets.
+Protocol 2 adds horizon compaction on the server and paged snapshots. A server accepts protocol 1 and protocol 2 for one release; see [Protocol 1](#protocol-1) for what a v1 request gets. `space` and `refresh` are optional fields of protocol 2, added without a new version: a side that does not know one leaves it out or ignores it, and the other side converges anyway.
 
 ## App tables
 
 Every synced table has `id TEXT PRIMARY KEY`. Columns use SQLite storage classes only: `TEXT`, `INTEGER`, `REAL`. JSON is `TEXT`. Booleans are `INTEGER` 0 or 1. Timestamps are whatever text or integer the app chooses; the engine never interprets them. The DDL is identical on the server and on every client, generated from the app's Drizzle `sqlite-core` schema.
 
-Schema evolution is additive only. On start, server and client compare `PRAGMA table_info` with the schema and run `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD COLUMN` for what is missing. A removed column stays in place and is ignored. A column whose type must change gets a new name. Unknown columns in a write are ignored by the server; unknown columns in a pulled row are ignored by the client. A client whose migrate added a table or a column to an existing database sets `_meta.cursor` to 0 and drops a snapshot in progress (`after`, `snapshot_head`) in the same transaction, so its next sync takes a fresh snapshot: rows it pulled before the upgrade were stored without the new column, and the server resends a row only when it changes.
+Schema evolution is additive only. On start, server and client compare `PRAGMA table_info` with the schema and run `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD COLUMN` for what is missing. A removed column stays in place and is ignored. A column whose type must change gets a new name. Unknown columns in a write are ignored by the server; unknown columns in a pulled row are ignored by the client. Rows a client pulled before it had a table or a column were stored without it, and the server resends a row only when it changes. So a client whose migrate created a table or added a column records those tables in `_meta.refresh`, in the same transaction, and keeps its cursor: its next sync pulls those tables whole and everything else as a delta ([Refresh](#refresh)). Two cases start a full snapshot over instead, by setting `_meta.cursor` to 0 and deleting `after`, `snapshot_head` and `refresh`: a cursor of 0, which gets a full snapshot anyway, and a snapshot in progress, whose earlier pages were stored without the new column.
 
 ## Server tables
 
@@ -48,7 +48,10 @@ A space has `retention` (default 30 days) and `compactEvery` (default one hour).
 ```sql
 CREATE TABLE IF NOT EXISTS _outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, "table" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, col TEXT);
 CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value);
+CREATE TABLE IF NOT EXISTS _seen ("table" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY ("table", id)) WITHOUT ROWID;
 ```
+
+`_seen` holds the key of every live row a snapshot in progress has delivered. It is empty between snapshots. The client's migrate creates it. It is not part of the schema's client DDL or of a generated `SyncSchema.swift`, since no trigger names it.
 
 `_meta` holds:
 
@@ -57,6 +60,8 @@ CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value);
 - `applying`: 1 while pulled rows are being written, else absent or 0.
 - `space`: the `space` of the last response that carried one, absent before the first.
 - `after` and `snapshot_head`: present together only while a paged snapshot is in progress. `after` is the JSON `{"table": ..., "id": ...}` of the last row received, `snapshot_head` the `head` of the snapshot's first page. Both are written and cleared in the same transaction as the rows they describe.
+- `refresh`: present only while tables the schema grew are still to be pulled whole. It is the JSON `{"tables": [...], "after": {"table": ..., "id": ...}}`, sent as the request's `refresh`, with `after` present once a page of them has landed. The client never leaves a full snapshot in progress and `refresh` set together.
+- `seen`: the `cursor`, `after`, `snapshot_head` and `refresh` values as the last apply left them, which are the values `_seen` was written for. Migrate compares it with the current values.
 
 Writes are captured by generated triggers, one set per app table, so no client code can forget to queue a change:
 
@@ -106,16 +111,31 @@ Each write carries `seq` = the largest outbox `seq` in its group. A `put` or `pa
 
 `writes` may be empty, which makes the call a pull. Values are JSON `string`, `number`, or `null`. A `put` must carry every `NOT NULL` column without a default. `after` is optional and only meaningful on a snapshot: it is the `next` of the previous page, and the response continues after that row. The server ignores `after` on a delta. `space` is the client's `_meta.space`, or `""` when it has none; clients older than spaces leave it out.
 
+A client with `_meta.refresh` and no snapshot in progress sends that value as `refresh` and no top-level `after`:
+
+```json
+{
+	"protocol": 2,
+	"client": "4f0a...",
+	"cursor": 42,
+	"writes": [],
+	"space": "6f1c...",
+	"refresh": { "tables": ["tasks", "labels"], "after": { "table": "tasks", "id": "t9" } }
+}
+```
+
+`refresh.after` is the `next` of the previous refresh page. It sits inside `refresh` so that a server older than refresh, which drops the whole field, never reads it as the `after` of a full snapshot.
+
 ## Server apply
 
 In one transaction, in ascending `seq` order (the server sorts the batch, since coalescing emits groups in first-seen order with each group's largest `seq`), for each write:
 
-1. If `seq <= _clients[client]`, skip it, and otherwise set `_clients[client] := seq` before the next write. This is the exactly-once replay rule, and it is what the Bend model proves.
+1. If `seq <= _clients[client]`, skip it as a replay, and otherwise set `_clients[client] := seq` before the next write. This is the exactly-once replay rule, and it is what the Bend model proves.
 2. Validate: known table, known op, column names filtered to the schema, storage class per column, `NOT NULL` respected, the app's optional validator per column (for JSON shapes). An `id` validator runs against the write's `id` for `put` and `patch`, and its failure reads `id: <message>`. A failure puts `{ seq, table, id, reason }` into `rejected` and the write is otherwise skipped.
 3. `put`: upsert the full row with `INSERT ... ON CONFLICT (id) DO UPDATE SET` every column (missing nullable columns become their default or null). Never `INSERT OR REPLACE`: it is a delete plus an insert and cascades through foreign keys. `patch`: `UPDATE` the named columns; if no row exists, the write is a no-op and not counted. `delete`: `DELETE`, counted even when no row exists, so the tombstone reaches clients that still hold the row.
 4. For a counted write: `head := head + 1`, `_changes[(table, id)] := (head, deleted)`, and one `_log` row.
 5. `_clients[client] := max(_clients[client], max(seq) over the batch)`, applied even when writes were rejected or no-ops, so the client clears its outbox. `acked` in the response is that stored value.
-6. For every rejected write, the current server row or tombstone for its `(table, id)` is included in `rows` whatever its `seq`, so the client replaces the value the server refused. A rejected row whose `_changes` entry was compacted comes back as a tombstone.
+6. For every rejected, skipped or replayed write, the current server row or tombstone for its `(table, id)` is included in `rows` whatever its `seq`, so the client replaces the value the server did not take. A replay gets one because the response that said whether the write landed, and with which row, never reached the client. A row whose `_changes` entry was compacted comes back as a tombstone.
 
 Then the pull (below), then compaction when due.
 
@@ -143,10 +163,17 @@ Conflicts resolve as column-level last write to arrive. A delete beats a later p
 }
 ```
 
-The server answers a **snapshot** when `cursor = 0`, `cursor < horizon`, `after` is present, `cursor > head`, or the request carries a `space` other than its own, else a **delta**. A `space` other than its own means the cursor and any `after` came from another space, so that snapshot starts at the first page and ignores `after`. A cursor past the head came from another space too, but a client keeps that cursor until its snapshot ends, so those pages continue from `after`. Every protocol 2 response carries `space`.
+The server answers one of three things.
+
+- A **full snapshot** when `cursor = 0`, `cursor < horizon`, `after` is present, `cursor > head`, or the request carries a `space` other than its own. A `space` other than its own means the cursor and any `after` came from another space, so that snapshot starts at the first page and ignores `after`. A cursor past the head came from another space too, but a client keeps that cursor until its snapshot ends, so those pages continue from `after`. A full snapshot ignores `refresh`: it holds those tables too.
+- A **refresh** when none of that holds and the request carries `refresh`.
+- A **delta** otherwise.
+
+Every protocol 2 response carries `space`.
 
 - Delta: `snapshot` is `false`, `rows` are every `_changes` entry with `seq > cursor` joined with the current full row, `next` is `null`.
-- Snapshot: `snapshot` is `true`, `rows` holds live rows only, in schema table order then by `id` (SQLite's default text order), starting after `after` when the request carried one, at most `pageSize` rows (space option, default 1000). `next` is the `{ table, id }` of the last row when more rows follow, else `null`. Every page carries the current `head`.
+- Full snapshot: `snapshot` is `true`, `rows` holds live rows only, in schema table order then by `id` (SQLite's default text order), starting after `after` when the request carried one, at most `pageSize` rows (space option, default 1000). `next` is the `{ table, id }` of the last row when more rows follow, else `null`. Every page carries the current `head`.
+- Refresh: a snapshot of the tables `refresh.tables` names that the server has, in the same order and pages, starting after `refresh.after`. `snapshot` is `true` and `tables` lists those tables in schema order, which is how the client tells a refresh from a full snapshot. A name the server does not have is skipped, so `tables` and `rows` may be empty. The rows of step 6 of the server apply ride along as in any response, also when their table is not one of `tables`. No other response carries `tables`.
 
 Status codes: 200 on success even with rejections; 400 for a body that is not this shape; 401 from the app's auth; 426 when `protocol` is not 1 or 2.
 
@@ -156,18 +183,35 @@ First, if the request carried writes and `acked` is greater than the largest `se
 
 Otherwise, in one transaction:
 
-1. Set `_meta.applying = 1`. If the response carries a `space` other than `_meta.space`, store it and treat no snapshot as in progress: the server restarted from the first page. Otherwise read `_meta.after` and `_meta.snapshot_head`; together they say a paged snapshot is in progress.
-2. If `snapshot` and no snapshot is in progress, delete every row of every app table except rows that have a pending `_outbox` entry with `seq > acked`. A page requested with `after` never wipes.
-3. For each row, skip it when `_outbox` holds a pending entry for its `(table, id)` whose `seq` is above `acked` (the next sync re-sends that write and the row comes back merged); otherwise `DELETE` for a tombstone or upsert (`INSERT ... ON CONFLICT (id) DO UPDATE SET ... WHERE (columns) IS NOT (excluded columns)`) for a live row. The `WHERE` leaves a row whose values already match untouched, so the echo of the client's own write fires no update hook.
-4. Delete `_outbox` rows with `seq <= acked`.
-5. If `next` is set: store `_meta.after := next` and `_meta.snapshot_head := snapshot_head ?? head`, leave `_meta.cursor` alone. Else: `_meta.cursor := snapshot_head ?? head` and delete `after` and `snapshot_head`.
-6. Set `_meta.applying = 0`. Then notify observers of the tables where a row was inserted, updated or deleted.
+1. Set `_meta.applying = 1`. If the response carries a `space` other than `_meta.space`, store it and delete `after`, `snapshot_head` and `refresh`: the server restarted from the first page of a full snapshot. Then read what is in progress: `after` with `snapshot_head` is a full snapshot, `refresh` is a refresh.
+2. Name the response. `snapshot` with `tables` is a refresh page. `snapshot` without `tables` is a full snapshot page, and it deletes `_meta.refresh`, since it holds those tables too. Anything else is a delta. Empty `_seen` on a first page: a full snapshot page with no full snapshot in progress, or a refresh page with no `refresh.after` stored.
+3. On a snapshot page of either kind that is not a first page, copy the key of every `_outbox` row with `seq <= acked` into `_seen`. The page of such a row may already have gone by, so the snapshot's silence says nothing about it. A write that landed did so after the cursor the snapshot ends on, and the next delta says what became of its row. A write that did not land comes back as a row of the same response. A write acked with the first page gets no such entry: it landed before any page was read, also when the ack is the replay of a request whose response was lost, so the snapshot holds its row or the row is gone. Then delete `_outbox` rows with `seq <= acked`.
+4. For each row, skip it when `_outbox` still holds an entry for its `(table, id)` (the next sync re-sends that write and the row comes back merged); otherwise `DELETE` for a tombstone or upsert (`INSERT ... ON CONFLICT (id) DO UPDATE SET ... WHERE (columns) IS NOT (excluded columns)`) for a live row, and on a snapshot page add the live row's key to `_seen`. The `WHERE` leaves a row whose values already match untouched, so neither the echo of the client's own write nor a snapshot of a row the client already holds fires an update hook.
+5. On a snapshot page with `next` null, the snapshot is whole. In every app table for a full snapshot, or in every table of `tables` for a refresh, delete the rows that are neither in `_seen` nor named by an `_outbox` entry, then empty `_seen`. No page deletes rows before this one: a snapshot never empties a table first.
+6. Store where the sync stands:
+   - Refresh page: with `next`, `_meta.refresh.after := next`; else delete `_meta.refresh`. `_meta.cursor` does not move. Another request follows.
+   - Full snapshot page with `next`: `_meta.after := next` and `_meta.snapshot_head := snapshot_head ?? head`, `_meta.cursor` left alone. Another request follows.
+   - Delta while `_meta.refresh` is set: the server is older than refresh and dropped the field. Set `_meta.cursor := 0` and delete `_meta.refresh`, so the next request takes a full snapshot. Another request follows.
+   - Otherwise (a delta, or the last page of a full snapshot): `_meta.cursor := snapshot_head ?? head` and delete `after` and `snapshot_head`. The sync is done.
+7. Set `_meta.seen` to the `cursor`, `after`, `snapshot_head` and `refresh` values now stored, and `_meta.applying = 0`. Then notify observers of the tables where a row was inserted, updated or deleted.
 
-The cursor lands on the **first** page's head, not the last, so a row that changed while later pages were fetched is re-pulled by the next delta.
+The cursor lands on the **first** page's head, not the last, so a row that changed while later pages were fetched is re-pulled by the next delta. A refresh leaves the cursor where it was for the same reason: the delta from it follows the last refresh page in the same sync and brings every row that changed since, in the refreshed tables and outside them.
+
+Migrate trusts `_seen` only when `_meta.seen` equals the stored `cursor`, `after`, `snapshot_head` and `refresh`. A client from before `_seen` wrote no `_meta.seen`, emptied the tables on its first page and recorded no row, so step 5 would delete the rows of its pages. The same holds for such a build that runs between two launches of this one, as after a rollback: it moves `after` or the cursor and leaves `_meta.seen` behind. On a mismatch a full snapshot in progress starts over at cursor 0, and a refresh that has `after` drops it and starts its pages over.
+
+### Refresh
+
+A refresh is how a client catches up on tables its schema grew without pulling the whole space. The client keeps its cursor, pulls the grown tables whole, then pulls a delta:
+
+1. Migrate records the grown tables in `_meta.refresh`.
+2. Each request carries `refresh` until the server answers a page with `next` null. Rows of those tables are upserted, so only rows whose values differ are written, and rows the server no longer shows the reader are deleted with the last page.
+3. The next request carries no `refresh` and gets the delta from the cursor the client kept.
+
+The server decides whether a refresh is enough. A cursor that needs a full snapshot gets one from the first page whatever the request's `refresh` says, also in the middle of a refresh, and the client drops `_meta.refresh` when that page arrives. A server older than refresh answers the first refresh request with a delta, and the client falls back to a full snapshot as step 6 says. A client older than refresh never sends the field and resets its cursor to 0 when its schema grows, which every server answers with a full snapshot.
 
 ### The sync loop
 
-One sync is: collect the outbox, send it with `cursor` and, when `_meta.after` is set, that `after`; apply the response; while `_meta.after` is still set, send `{ writes: [], cursor, after }` and apply, until it clears. A client that crashes between pages resumes from `_meta.after` on its next sync and does not wipe again. The outbox collected after the first request waits for the next sync.
+One sync is: collect the outbox, build the request from `_meta` (`cursor`, `space`, then `after` when a full snapshot is in progress, else `refresh` when one is set), send it with the outbox, and apply the response. While the apply says another request follows, build the next request the same way with `writes: []`, send it and apply. A client that crashes between pages resumes from `_meta.after` or `_meta.refresh` on its next sync, and `_seen` still holds the rows of the pages before the crash. The outbox collected after the first request waits for the next sync.
 
 ## Protocol 1
 
@@ -179,4 +223,4 @@ The server exposes a WebSocket at `/live` with the same authorization. After any
 
 ## What the Bend model covers
 
-`spec/sync.bend` models the server over opaque naturals: tables, ids, columns and values are `Nat`, `_changes` is the model's `changes`, `_clients` is `clients`, `_meta.horizon` is `horizon`. `apply` is one write; `applyBatch` sorts by seq and folds `apply`; `compact(s, h)` is compaction to horizon `h`; `pull(s, cursor)` answers `Snapshot{rows, head}` below the horizon (or at cursor 0) and `Delta{items, head}` above; `pullPage(s, after, n)` is one snapshot page. The client side is `applyPull` (no outbox skip) and `collect(client, local, outbox)`, the coalescing rule over `Entry{seq, table, id, op}`. `spec/vectors.json` is generated from the model's JavaScript build and replayed through the TypeScript core in `packages/core/spec.test.ts`, including compaction at a fixed write, an outbox through `collect` and one batch, and pages taken while writes land followed by a delta.
+`spec/sync.bend` models the server over opaque naturals: tables, ids, columns and values are `Nat`, `_changes` is the model's `changes`, `_clients` is `clients`, `_meta.horizon` is `horizon`. `apply` is one write; `applyBatch` sorts by seq and folds `apply`; `compact(s, h)` is compaction to horizon `h`; `pull(s, cursor)` answers `Snapshot{rows, head}` below the horizon (or at cursor 0) and `Delta{items, head}` above; `pullPage(s, after, n)` is one snapshot page. The client side is `applyPull` (no outbox skip) and `collect(client, local, outbox)`, the coalescing rule over `Entry{seq, table, id, op}`. `spec/vectors.json` is generated from the model's JavaScript build and replayed through the TypeScript core in `packages/core/spec.test.ts`, including compaction at a fixed write, an outbox through `collect` and one batch, and pages taken while writes land followed by a delta. The model's `applyPull` replaces the client's rows with a snapshot's. The clients reach the same rows by upserting and deleting what the snapshot lacked, which the vectors check. Refresh is outside the model, as views and space identity are: it is a snapshot of some tables followed by a delta the model already has.

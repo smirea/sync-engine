@@ -10,5 +10,5 @@ export {
 	type SpaceOptions,
 	type View,
 } from './space.ts';
-export { createClient, type Client, type SnapshotProgress } from './client.ts';
+export { createClient, type Applied, type Client, type SnapshotProgress } from './client.ts';
 export { bearerToken, handleSync, LIVE_PROTOCOL, SyncRequestSchema, withBearer } from './http.ts';

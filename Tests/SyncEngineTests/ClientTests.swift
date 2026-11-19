@@ -22,12 +22,8 @@ final class ClientTests: XCTestCase {
         StubServer.json(200, Fixture.response(head: head, acked: acked, snapshot: true, rows: rows, next: next))
     }
 
-    private static func tag(_ id: String) -> PulledRow {
-        PulledRow(table: "tags", id: id, deleted: 0, values: ["id": .string(id), "name": .string(id.uppercased())])
-    }
-
     private func meta(_ pool: DatabasePool) throws -> [String] {
-        try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('cursor', 'after', 'snapshot_head') ORDER BY key")
+        try pool.strings("SELECT key || '=' || value FROM _meta WHERE key IN ('cursor', 'after', 'snapshot_head', 'refresh') ORDER BY key")
     }
 
     func testARoundTripPushesTheOutboxAndAppliesTheResponse() async throws {
@@ -154,7 +150,7 @@ final class ClientTests: XCTestCase {
         StubServer.reset(
             Self.page(head: 7, acked: 1, [Fixture.note("n1", title: "N1"), Fixture.note("n2", title: "N2")], next: After(table: "notes", id: "n2")),
             Self.page(head: 7, [Fixture.note("n3", title: "N3"), Fixture.note("n4", title: "N4")], next: After(table: "notes", id: "n4")),
-            Self.page(head: 7, [Fixture.note("n5", title: "MINE"), Self.tag("t1")], next: nil)
+            Self.page(head: 7, [Fixture.note("n5", title: "MINE"), Fixture.tag("t1")], next: nil)
         )
 
         await client.sync()
@@ -169,7 +165,7 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(client.status, .idle)
     }
 
-    func testARestartBetweenPagesResumesFromAfterWithoutWipingAgain() async throws {
+    func testARestartBetweenPagesResumesFromAfterAndKeepsTheEarlierPages() async throws {
         do {
             let (client, pool) = try client()
             StubServer.reset(
@@ -187,8 +183,8 @@ final class ClientTests: XCTestCase {
         try pool.sql("INSERT INTO notes (id, title) VALUES ('mine', 'MINE')")
         XCTAssertEqual(client.snapshotRows, 0)
         StubServer.reset(
-            Self.page(head: 8, acked: 1, [Fixture.note("mine", title: "MINE"), Self.tag("t1")], next: After(table: "tags", id: "t1")),
-            Self.page(head: 8, [Self.tag("t2")], next: nil)
+            Self.page(head: 8, acked: 1, [Fixture.note("mine", title: "MINE"), Fixture.tag("t1")], next: After(table: "tags", id: "t1")),
+            Self.page(head: 8, [Fixture.tag("t2")], next: nil)
         )
 
         await client.sync()
@@ -197,6 +193,28 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(try pool.strings("SELECT id FROM notes ORDER BY id"), ["mine", "n1", "n2", "n3", "n4"])
         XCTAssertEqual(try pool.strings("SELECT id FROM tags ORDER BY id"), ["t1", "t2"])
         XCTAssertEqual(try meta(pool), ["cursor=7"])
+        XCTAssertNil(client.snapshotRows)
+        XCTAssertEqual(client.status, .idle)
+    }
+
+    func testARefreshRunsItsPagesAndTheDeltaInOneSyncWithoutReportingASnapshot() async throws {
+        let (client, pool) = try client()
+        StubServer.reset(StubServer.json(200, Fixture.response(head: 4, rows: [Fixture.note("n1", title: "N1"), Fixture.tag("t1")])))
+        await client.sync()
+        try pool.sql(#"INSERT INTO _meta (key, value) VALUES ('refresh', '{"tables":["tags"]}')"#)
+        StubServer.reset(
+            StubServer.json(200, Fixture.response(head: 6, snapshot: true, rows: [Fixture.tag("t1")], next: After(table: "tags", id: "t1"), tables: ["tags"])),
+            StubServer.json(200, Fixture.response(head: 6, snapshot: true, rows: [Fixture.tag("t2")], tables: ["tags"])),
+            StubServer.json(200, Fixture.response(head: 6, rows: [Fixture.note("n2", title: "N2")]))
+        )
+
+        await client.sync()
+
+        XCTAssertEqual(try Self.requests().map { "\($0.cursor) \($0.refresh?.tables ?? []) \($0.refresh?.after?.id ?? "-")" }, [#"4 ["tags"] -"#, #"4 ["tags"] t1"#, "4 [] -"])
+        XCTAssertEqual(try pool.strings("SELECT id FROM notes ORDER BY id"), ["n1", "n2"])
+        XCTAssertEqual(try pool.strings("SELECT id FROM tags ORDER BY id"), ["t1", "t2"])
+        XCTAssertEqual(try meta(pool), ["cursor=6"])
+        XCTAssertEqual(client.head, 6)
         XCTAssertNil(client.snapshotRows)
         XCTAssertEqual(client.status, .idle)
     }

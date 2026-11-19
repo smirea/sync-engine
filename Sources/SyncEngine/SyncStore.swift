@@ -26,9 +26,17 @@ struct SyncStore: Sendable {
         tables = Dictionary(uniqueKeysWithValues: schema.tables.map { ($0.name, $0) })
     }
 
+    /// The values `_seen` was last written for. Another engine version that applies a page moves one of them without
+    /// recording the rows it stored, as a build from before `_seen` does after a rollback, so a mismatch at migrate
+    /// means `_seen` no longer describes the pages in the database.
+    private static let seenFor = """
+    (SELECT group_concat(coalesce((SELECT value FROM _meta WHERE key = name), ''), char(10)) \
+    FROM (SELECT 'cursor' AS name UNION ALL SELECT 'after' UNION ALL SELECT 'snapshot_head' UNION ALL SELECT 'refresh'))
+    """
+
     /// The generator emits the `ALTER TABLE` for a grown schema; the client only makes rerunning it harmless.
     func migrate(_ db: Database) throws {
-        let grows = try schema.tables.contains { !Set(["id"] + $0.columns).isSubset(of: try columns(of: $0.name, db)) }
+        let grown = try schema.tables.filter { !Set(["id"] + $0.columns).isSubset(of: try columns(of: $0.name, db)) }.map(\.name)
         let addColumn = /^\s*ALTER\s+TABLE\s+"?(\w+)"?\s+ADD\s+COLUMN\s+"?(\w+)"?/.ignoresCase()
         for statement in schema.statements {
             if let match = statement.firstMatch(of: addColumn),
@@ -43,13 +51,28 @@ struct SyncStore: Sendable {
                 throw SyncSchemaError(description: "\(table.name).\(missing) is in the schema but not in the database; the DDL must add it")
             }
         }
-        // Rows pulled before the new table or column were stored without it, and the server only resends a row when it
-        // changes, so a fresh snapshot brings the values other devices set before the upgrade.
-        if grows {
-            try db.execute(sql: "UPDATE _meta SET value = 0 WHERE key = 'cursor'")
-            try db.execute(sql: "DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')")
-        }
+        // The store's own table, which no generated statement names: an app pins the generator and this package
+        // separately, so DDL the generator had to emit could be missing under a newer store.
+        try db.execute(sql: "CREATE TABLE IF NOT EXISTS _seen (\"table\" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (\"table\", id)) WITHOUT ROWID")
         try db.execute(sql: "INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", arguments: [UUID().uuidString.lowercased()])
+        let paging = try snapshot(db) != nil
+        let pulling = try refresh(db)
+        // Pages another engine version applied are not in `_seen`, so the last page would take their rows for rows the
+        // server lacks: a snapshot starts over, and a refresh starts its pages over.
+        let untracked = try (paging || pulling?.after != nil)
+            && !Bool.fetchOne(db, sql: "SELECT (SELECT value FROM _meta WHERE key = 'seen') IS \(Self.seenFor)")!
+        if untracked, let pulling { try setRefresh(Refresh(tables: pulling.tables), db) }
+        guard !grown.isEmpty || (untracked && paging) else { return }
+        // Rows pulled before a table or a column existed were stored without it, and a delta resends a row only when it
+        // changes, so the grown tables are pulled whole again. A cursor that gets a full snapshot anyway, or one in
+        // progress whose earlier pages predate the growth, starts that snapshot over instead.
+        if try cursor(db) == 0 || paging {
+            try db.execute(sql: "UPDATE _meta SET value = 0 WHERE key = 'cursor'")
+            try db.execute(sql: "DELETE FROM _meta WHERE key IN ('after', 'snapshot_head', 'refresh')")
+        } else {
+            let pending = try refresh(db)?.tables ?? []
+            try setRefresh(Refresh(tables: pending + grown.filter { !pending.contains($0) }), db)
+        }
     }
 
     /// Empties every app table and the outbox, with `applying` set so nothing is captured, then mints a new client id at
@@ -58,6 +81,7 @@ struct SyncStore: Sendable {
         try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 1)")
         for table in schema.tables { try db.execute(sql: "DELETE FROM \(table.name)") }
         try db.execute(sql: "DELETE FROM _outbox")
+        try db.execute(sql: "DELETE FROM _seen")
         try db.execute(sql: "DELETE FROM _meta")
         try db.execute(sql: "INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", arguments: [UUID().uuidString.lowercased()])
     }
@@ -79,6 +103,30 @@ struct SyncStore: Sendable {
         guard let after = try meta("after", db) else { return nil }
         let head = try Int.fetchOne(db, sql: "SELECT value FROM _meta WHERE key = 'snapshot_head'") ?? 0
         return SnapshotProgress(after: try JSONDecoder().decode(After.self, from: Data(after.utf8)), head: head)
+    }
+
+    /// The tables the schema grew that are still to be pulled whole, else nil.
+    func refresh(_ db: Database) throws -> Refresh? {
+        try meta("refresh", db).map { try JSONDecoder().decode(Refresh.self, from: Data($0.utf8)) }
+    }
+
+    private func setRefresh(_ refresh: Refresh, _ db: Database) throws {
+        try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('refresh', ?)", arguments: [try Self.json(refresh)])
+    }
+
+    private static func json(_ value: some Encodable) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return String(decoding: try encoder.encode(value), as: UTF8.self)
+    }
+
+    /// The next request: the cursor and space, plus the page of a snapshot in progress or the tables to refresh.
+    func request(client: String, writes: [SyncWrite], _ db: Database) throws -> SyncRequest {
+        let progress = try snapshot(db)
+        return SyncRequest(
+            protocol: 2, client: client, cursor: try cursor(db), writes: writes, after: progress?.after,
+            space: try meta("space", db) ?? "", refresh: progress == nil ? try refresh(db) : nil
+        )
     }
 
     func collect(_ db: Database) throws -> Collected {
@@ -126,30 +174,37 @@ struct SyncStore: Sendable {
     }
 
     /// `acked` defaults to the response's; the client raises it to `Collected.highest` so dropped groups clear too.
-    func apply(_ response: SyncResponse, acked: Int? = nil, _ db: Database) throws {
+    /// Answers whether the sync needs another request before it is done.
+    @discardableResult
+    func apply(_ response: SyncResponse, acked: Int? = nil, _ db: Database) throws -> Bool {
         let acked = acked ?? response.acked
         try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 1)")
-        // The server answers another space's cursor with a snapshot from its first page, so pages fetched before belong to
-        // the old space and this page wipes like a first one.
-        let stored = try meta("space", db) ?? ""
-        let moved = response.space.map { $0 != stored } ?? false
-        if moved, let space = response.space {
+        // The server answers another space's cursor with a full snapshot from its first page, so pages fetched before and
+        // a refresh under way belong to the old space.
+        if let space = response.space, space != (try meta("space", db) ?? "") {
             try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('space', ?)", arguments: [space])
+            try db.execute(sql: "DELETE FROM _meta WHERE key IN ('after', 'snapshot_head', 'refresh')")
         }
-        let progress = moved ? nil : try snapshot(db)
-        if response.snapshot, progress == nil {
-            for table in schema.tables {
-                try db.execute(
-                    sql: "DELETE FROM \"\(table.name)\" WHERE id NOT IN (SELECT id FROM _outbox WHERE \"table\" = ? AND seq > ?)",
-                    arguments: [table.name, acked]
-                )
-            }
+        let progress = try snapshot(db)
+        let refreshing = try refresh(db)
+        let scoped = response.snapshot && response.tables != nil
+        let full = response.snapshot && !scoped
+        // A full snapshot holds the refreshed tables too.
+        if full, refreshing != nil { try db.execute(sql: "DELETE FROM _meta WHERE key = 'refresh'") }
+        let first = (full && progress == nil) || (scoped && refreshing?.after == nil)
+        if first { try db.execute(sql: "DELETE FROM _seen") }
+        if response.snapshot, !first {
+            // The page of a row pushed with a later page may already have gone by, so the snapshot's silence is no verdict
+            // on it. A write that landed did so after the cursor this snapshot ends on, and the next delta says what
+            // became of its row. One that did not land comes back as a row of this response. A write acked with the
+            // first page landed before any page was read, so the snapshot itself is the verdict.
+            try db.execute(sql: "INSERT OR IGNORE INTO _seen (\"table\", id) SELECT \"table\", id FROM _outbox WHERE seq <= ?", arguments: [acked])
         }
+        try db.execute(sql: "DELETE FROM _outbox WHERE seq <= ?", arguments: [acked])
         for row in response.rows {
             guard let known = tables[row.table] else { continue }
             let pending = try Bool.fetchOne(
-                db, sql: "SELECT EXISTS (SELECT 1 FROM _outbox WHERE \"table\" = ? AND id = ? AND seq > ?)",
-                arguments: [row.table, row.id, acked]
+                db, sql: "SELECT EXISTS (SELECT 1 FROM _outbox WHERE \"table\" = ? AND id = ?)", arguments: [row.table, row.id]
             )!
             if pending { continue }
             if row.deleted != 0 {
@@ -170,20 +225,54 @@ struct SyncStore: Sendable {
                 sql: "INSERT INTO \"\(row.table)\" (\(names)) VALUES (\(marks)) ON CONFLICT (id) DO \(update)",
                 arguments: StatementArguments(arguments)
             )
+            if response.snapshot {
+                try db.execute(sql: "INSERT OR IGNORE INTO _seen (\"table\", id) VALUES (?, ?)", arguments: [row.table, row.id])
+            }
         }
-        try db.execute(sql: "DELETE FROM _outbox WHERE seq <= ?", arguments: [acked])
-        let head = progress?.head ?? response.head
-        if let next = response.next {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .sortedKeys
-            let after = String(decoding: try encoder.encode(next), as: UTF8.self)
-            try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('after', ?), ('snapshot_head', ?)", arguments: [after, head])
+        if response.snapshot, response.next == nil {
+            // The snapshot is whole: what it did not hold is gone from the server. Rows are never emptied first, so a
+            // snapshot of an unchanged space writes to no app table.
+            for table in schema.tables where response.tables?.contains(table.name) ?? true {
+                try db.execute(
+                    sql: """
+                    DELETE FROM "\(table.name)" WHERE id NOT IN (SELECT id FROM _seen WHERE "table" = ?)
+                    AND id NOT IN (SELECT id FROM _outbox WHERE "table" = ?)
+                    """,
+                    arguments: [table.name, table.name]
+                )
+            }
+            try db.execute(sql: "DELETE FROM _seen")
+        }
+        let more: Bool
+        if let pulled = response.tables, scoped {
+            // The cursor stays: the delta from it follows the last page and brings what changed while paging.
+            if let next = response.next {
+                try setRefresh(Refresh(tables: refreshing?.tables ?? pulled, after: next), db)
+            } else {
+                try db.execute(sql: "DELETE FROM _meta WHERE key = 'refresh'")
+            }
+            more = true
+        } else if let next = response.next {
+            try db.execute(
+                sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('after', ?), ('snapshot_head', ?)",
+                arguments: [try Self.json(next), progress?.head ?? response.head]
+            )
+            more = true
+        } else if !full, refreshing != nil {
+            // A delta answered a refresh: the server is older than refresh and dropped it. A full snapshot is the only
+            // other way to the rows stored before the tables grew.
+            try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('cursor', 0)")
+            try db.execute(sql: "DELETE FROM _meta WHERE key = 'refresh'")
+            more = true
         } else {
             // The first page's head: rows that changed while later pages were fetched come with the next delta.
-            try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('cursor', ?)", arguments: [head])
+            try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('cursor', ?)", arguments: [progress?.head ?? response.head])
             try db.execute(sql: "DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')")
+            more = false
         }
+        try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('seen', \(Self.seenFor))")
         try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 0)")
+        return more
     }
 }
 
