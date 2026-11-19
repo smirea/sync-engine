@@ -173,32 +173,23 @@ public final class SyncClient {
             var collected = try await database.read { try store.collect($0) }
             if !collected.writes.isEmpty, let beforePush { try await beforePush() }
             while true {
-                let (cursor, progress, space) = try await database.read { db in
-                    (try store.cursor(db), try store.snapshot(db), try store.meta("space", db) ?? "")
-                }
-                let request = SyncRequest(
-                    protocol: 2, client: clientID, cursor: cursor, writes: collected.writes, after: progress?.after, space: space
-                )
+                let (client, writes) = (clientID, collected.writes)
+                let request = try await database.read { try store.request(client: client, writes: writes, $0) }
                 let response = try await post(request, token: token)
                 if !collected.writes.isEmpty, response.acked > collected.sent {
                     try await adoptNewClientID(acked: response.acked, sent: collected.sent)
                     return
                 }
                 let acked = response.acked >= collected.sent ? max(response.acked, collected.highest) : response.acked
-                let (applied, paging) = try await database.write { db in
-                    try store.apply(response, acked: acked, db)
-                    return (try store.cursor(db), try store.snapshot(db) != nil)
+                let (more, applied, paging) = try await database.write { db in
+                    (try store.apply(response, acked: acked, db), try store.cursor(db), try store.snapshot(db) != nil)
                 }
                 let refused = response.rejected.map { SyncRejection(table: $0.table, id: $0.id, reason: $0.reason) }
                 if !refused.isEmpty { rejected = Array((refused + rejected).prefix(20)) }
-                if paging {
-                    snapshotRows = (snapshotRows ?? 0) + response.rows.count
-                    collected = Collected(writes: [], highest: 0)
-                    continue
-                }
-                snapshotRows = nil
+                snapshotRows = paging ? (snapshotRows ?? 0) + response.rows.count : nil
                 head = applied
-                break
+                guard more else { break }
+                collected = Collected(writes: [], highest: 0)
             }
             lastSyncAt = .now
             failures = 0

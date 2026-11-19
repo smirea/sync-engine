@@ -4,7 +4,6 @@ import {
 	type Rejected,
 	type Schema,
 	type SqlDriver,
-	type SyncRequest,
 	type SyncResponse,
 	type Write,
 } from '../../core/src/index.ts';
@@ -120,15 +119,6 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 	};
 
 	async function post(writes: Write[]): Promise<SyncResponse> {
-		const progress = core.snapshot();
-		const request: SyncRequest = {
-			protocol: 2,
-			client: core.clientId(),
-			cursor: core.cursor(),
-			writes,
-			...(progress ? { after: progress.after } : {}),
-			space: core.space(),
-		};
 		const reply = await fetchFn(`${options.endpoint}/sync`, {
 			method: 'POST',
 			headers: {
@@ -136,7 +126,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 				'content-type': 'application/json',
 				...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
 			},
-			body: JSON.stringify(request),
+			body: JSON.stringify(core.request(writes)),
 		});
 		if (reply.status === 401) throw new Unauthorized(`sync failed with 401: ${await reply.text()}`);
 		if (!reply.ok) throw new Error(`sync failed with ${reply.status}: ${await reply.text()}`);
@@ -149,14 +139,17 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 			let batch = core.collect();
 			if (batch.writes.length && options.beforePush) await options.beforePush();
 			let response: SyncResponse;
+			let more: boolean;
 			do {
 				response = await post(batch.writes);
 				if (response.rejected.length)
 					rejected = [...response.rejected.toReversed(), ...rejected].slice(0, REJECTED_KEPT);
-				for (const table of core.apply(response, batch.acked)) touched.add(table);
+				const applied = core.apply(response, batch.acked);
+				for (const table of applied.tables) touched.add(table);
+				more = applied.more;
 				batch = { writes: [], acked: 0 };
 				snapshotRows = core.snapshot() ? snapshotRows + response.rows.length : 0;
-			} while (core.snapshot());
+			} while (more);
 			lastError = null;
 			unauthorized = false;
 			return response;

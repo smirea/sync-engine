@@ -108,6 +108,7 @@ const SERVER_DDL = [
 const CLIENT_DDL = [
 	'CREATE TABLE IF NOT EXISTS _outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, "table" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, col TEXT)',
 	'CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)',
+	'CREATE TABLE IF NOT EXISTS _seen ("table" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY ("table", id)) WITHOUT ROWID',
 ];
 
 const NOT_APPLYING = "coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0";
@@ -139,34 +140,30 @@ export const clientStatements = (schema: Schema): string[] => [
 	...schema.ddl.client,
 ];
 
-export function migrate(driver: SqlDriver, schema: Schema, side: 'server' | 'client'): void {
-	driver.transaction(() => {
-		let grew = false;
-		for (const [index, table] of schema.tables.entries()) {
-			const present = new Set(driver.exec(`PRAGMA table_info(${table.name})`).map(row => row.name));
-			if (present.size === 0) {
-				driver.exec(schema.ddl.app[index]!);
-				grew = true;
-				continue;
-			}
-			for (const column of table.columns) {
-				if (present.has(column.name)) continue;
-				grew = true;
-				if (column.notNull && column.default === undefined) {
-					throw new Error(
-						`${table.name}.${column.name}: a NOT NULL column without a default cannot be added to an existing table`,
-					);
-				}
-				driver.exec(`ALTER TABLE ${table.name} ADD COLUMN ${columnDdl(column)}`);
-			}
+/**
+ * Adds what the database lacks and answers the tables it created or gave a column, which hold rows stored before
+ * that shape existed. Runs in the caller's transaction, so a crash cannot leave the shape grown and its cursor kept.
+ */
+export function migrate(driver: SqlDriver, schema: Schema, side: 'server' | 'client'): string[] {
+	const grown: string[] = [];
+	for (const [index, table] of schema.tables.entries()) {
+		const present = new Set(driver.exec(`PRAGMA table_info(${table.name})`).map(row => row.name));
+		if (present.size === 0) {
+			driver.exec(schema.ddl.app[index]!);
+			grown.push(table.name);
+			continue;
 		}
-		for (const sql of schema.ddl[side]) driver.exec(sql);
-		// Rows this client pulled before it had the new table or column were stored without it, and the server only sends a
-		// row again when it changes, so values other devices set before the upgrade would stay hidden. A fresh snapshot
-		// brings them; it runs in this transaction so a crash cannot leave the shape grown and the cursor kept.
-		if (side === 'client' && grew) {
-			driver.exec("UPDATE _meta SET value = 0 WHERE key = 'cursor'");
-			driver.exec("DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')");
+		const missing = table.columns.filter(column => !present.has(column.name));
+		for (const column of missing) {
+			if (column.notNull && column.default === undefined) {
+				throw new Error(
+					`${table.name}.${column.name}: a NOT NULL column without a default cannot be added to an existing table`,
+				);
+			}
+			driver.exec(`ALTER TABLE ${table.name} ADD COLUMN ${columnDdl(column)}`);
 		}
-	});
+		if (missing.length) grown.push(table.name);
+	}
+	for (const sql of schema.ddl[side]) driver.exec(sql);
+	return grown;
 }

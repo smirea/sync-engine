@@ -16,6 +16,7 @@ enum Fixture {
             "ALTER TABLE tags ADD COLUMN color TEXT",
             "CREATE TABLE IF NOT EXISTS _outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, \"table\" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, col TEXT)",
             "CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)",
+            "CREATE TABLE IF NOT EXISTS _seen (\"table\" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (\"table\", id)) WITHOUT ROWID",
         ] + triggers("notes", ["title", "body", "stars"]) + triggers("tags", ["name", "weight", "color"])
     )
 
@@ -55,12 +56,16 @@ enum Fixture {
         PulledRow(table: "notes", id: id, deleted: 0, values: ["id": .string(id), "title": .string(title), "body": body.map { .string($0) } ?? .null, "stars": .integer(stars)])
     }
 
+    static func tag(_ id: String) -> PulledRow {
+        PulledRow(table: "tags", id: id, deleted: 0, values: ["id": .string(id), "name": .string(id.uppercased())])
+    }
+
     static func tombstone(_ table: String, _ id: String) -> PulledRow {
         PulledRow(table: table, id: id, deleted: 1, values: nil)
     }
 
-    static func response(head: Int, acked: Int = 0, snapshot: Bool = false, rows: [PulledRow] = [], rejected: [RejectedWrite] = [], next: After? = nil, space: String? = nil) -> SyncResponse {
-        SyncResponse(head: head, acked: acked, rejected: rejected, snapshot: snapshot, rows: rows, next: next, space: space)
+    static func response(head: Int, acked: Int = 0, snapshot: Bool = false, rows: [PulledRow] = [], rejected: [RejectedWrite] = [], next: After? = nil, space: String? = nil, tables: [String]? = nil) -> SyncResponse {
+        SyncResponse(head: head, acked: acked, rejected: rejected, snapshot: snapshot, rows: rows, next: next, space: space, tables: tables)
     }
 }
 
@@ -71,6 +76,12 @@ extension DatabasePool {
                 OutboxRow(seq: $0["seq"], table: $0["table"], id: $0["id"], op: $0["op"], col: $0["col"])
             }
         }
+    }
+
+    /// Applies a response in its own transaction and answers whether the sync needs another request.
+    @discardableResult
+    func apply(_ response: SyncResponse, acked: Int? = nil, _ store: SyncStore) throws -> Bool {
+        try write { try store.apply(response, acked: acked, $0) }
     }
 
     func sql(_ sql: String) throws {

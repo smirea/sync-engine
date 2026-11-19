@@ -186,12 +186,16 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 		return row ? [live(table, row)] : [];
 	};
 
-	function snapshot(after: After | null, limit: number | null): { rows: PulledRow[]; next: After | null } {
+	function snapshot(
+		scope: readonly Table[],
+		after: After | null,
+		limit: number | null,
+	): { rows: PulledRow[]; next: After | null } {
 		const rows: PulledRow[] = [];
-		const found = after ? schema.tables.findIndex(table => table.name === after.table) : -1;
+		const found = after ? scope.findIndex(table => table.name === after.table) : -1;
 		const start = Math.max(0, found);
-		for (let i = start; i < schema.tables.length; i++) {
-			const table = schema.tables[i]!;
+		for (let i = start; i < scope.length; i++) {
+			const table = scope[i]!;
 			const from = after && i === found ? [after.id] : [];
 			const sql = `SELECT ${columnList(table)} FROM ${table.name}${from.length ? ' WHERE id > ?' : ''} ORDER BY id LIMIT ?`;
 			for (const row of driver.exec(sql, [...from, limit === null ? -1 : limit + 1 - rows.length]))
@@ -400,11 +404,18 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 			// A cursor past the head was issued by another space too, for a client that sends no space. The client keeps it
 			// until its snapshot's last page, so its later pages still carry it and must continue from `after`.
 			// A cursor below the horizon may have missed tombstones that are gone, so it gets a snapshot like cursor 0.
-			const snapshotting =
+			const full =
 				foreign || after !== null || request.cursor === 0 || request.cursor > head || request.cursor < meta('horizon');
-			const page = snapshotting
-				? snapshot(after, paged ? pageSize : null)
-				: { rows: delta(request.cursor), next: null };
+			// A refresh rides on a cursor that is good for a delta: the client keeps that cursor and pulls the delta once
+			// the tables are in. A cursor that gets a full snapshot gets it from the first page, whatever the refresh says.
+			const refresh = request.protocol === 2 && !full ? request.refresh : undefined;
+			const scope = refresh && schema.tables.filter(table => refresh.tables.includes(table.name));
+			const snapshotting = full || scope !== undefined;
+			const page = scope
+				? snapshot(scope, refresh!.after ?? null, pageSize)
+				: full
+					? snapshot(schema.tables, after, paged ? pageSize : null)
+					: { rows: delta(request.cursor), next: null };
 			const view = hooks.view?.(context);
 			// A skipped write was acked without landing, so the client gets the server's row back like a refused one.
 			const repaired = [...rejected, ...skipped];
@@ -418,6 +429,7 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 				response.next = page.next;
 				response.space = space;
 			}
+			if (scope) response.tables = scope.map(table => table.name);
 			if (now() - meta('compacted_at') > compactEvery) compactNow();
 			return response;
 		});
@@ -443,9 +455,11 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 
 	return {
 		migrate() {
-			migrate(driver, schema, 'server');
-			driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('head', 0), ('horizon', 0), ('compacted_at', 0)");
-			driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('space', ?)", [crypto.randomUUID()]);
+			driver.transaction(() => {
+				migrate(driver, schema, 'server');
+				driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('head', 0), ('horizon', 0), ('compacted_at', 0)");
+				driver.exec("INSERT OR IGNORE INTO _meta (key, value) VALUES ('space', ?)", [crypto.randomUUID()]);
+			});
 		},
 		space: spaceId,
 		sync,

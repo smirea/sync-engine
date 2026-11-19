@@ -11,14 +11,16 @@ const WriteSchema = z.discriminatedUnion('op', [
 	z.object({ ...target, op: z.literal('delete') }),
 ]);
 
+const AfterSchema = z.object({ table: z.string(), id: z.string() });
 const body = { client: z.string().min(1), cursor: z.int().nonnegative(), writes: z.array(WriteSchema) };
 export const SyncRequestSchema = z.discriminatedUnion('protocol', [
 	z.object({ protocol: z.literal(1), ...body }),
 	z.object({
 		protocol: z.literal(2),
 		...body,
-		after: z.object({ table: z.string(), id: z.string() }).optional(),
+		after: AfterSchema.optional(),
 		space: z.string().optional(),
+		refresh: z.object({ tables: z.array(z.string()), after: AfterSchema.optional() }).optional(),
 	}),
 ]);
 
