@@ -97,6 +97,15 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(request.refresh)
     }
 
+    func testAPutAckedWithTheFirstPageThatTheSnapshotDoesNotHoldIsGoneFromTheServer() throws {
+        let (pool, store) = try Fixture.migratedPool()
+        try pool.sql("INSERT INTO notes (id, title) VALUES ('n1', 'landed in a lost response, then deleted elsewhere')")
+        let sent = try pool.read { try store.collect($0) }.sent
+        try pool.apply(Fixture.response(head: 3, acked: sent, snapshot: true, rows: [Fixture.note("n2", title: "b")]), store)
+        XCTAssertEqual(try pool.strings("SELECT id FROM notes"), ["n2"])
+        XCTAssertEqual(try pool.outbox(), [])
+    }
+
     func testASnapshotBegunBeforeTheStoreRecordedTheRowsItSawStartsOver() throws {
         let (pool, store) = try Fixture.migratedPool()
         try pool.apply(Fixture.response(head: 8, snapshot: true, rows: [Fixture.note("n1", title: "a")], next: After(table: "notes", id: "n1")), store)

@@ -694,6 +694,24 @@ describe('a snapshot keeps what it does not change', () => {
 		expect(server.dump().notes!.map(r => r.id)).toEqual(['n1', 'n3', 'n4', 'n5', 'n6']);
 	});
 
+	test('a put that landed in a lost response and was deleted by another device goes with the snapshot', () => {
+		const { server, a, b } = setup();
+		insert(b, 'n1', 'lands, but b never hears');
+		server.sync(b.client.request(b.client.collect().writes));
+		a.pull();
+		a.db.exec("DELETE FROM notes WHERE id = 'n1'");
+		a.sync();
+
+		const retry = b.sync();
+		expect({ snapshot: retry.snapshot, acked: retry.acked, rows: retry.rows }).toEqual({
+			snapshot: true,
+			acked: 1,
+			rows: [],
+		});
+		expect(b.rows()).toEqual([]);
+		expect(b.client.pending()).toBe(0);
+	});
+
 	test('a snapshot begun before the client recorded the rows it saw starts over', () => {
 		const { server, a, b } = setup(schema, { pageSize: 2 });
 		for (let i = 1; i <= 3; i++) insert(a, `n${i}`, `note ${i}`);

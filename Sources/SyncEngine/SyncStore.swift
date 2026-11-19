@@ -180,10 +180,12 @@ struct SyncStore: Sendable {
         let full = response.snapshot && !scoped
         // A full snapshot holds the refreshed tables too.
         if full, refreshing != nil { try db.execute(sql: "DELETE FROM _meta WHERE key = 'refresh'") }
-        if (full && progress == nil) || (scoped && refreshing?.after == nil) { try db.execute(sql: "DELETE FROM _seen") }
-        if response.snapshot {
-            // The server holds a write it acked, or says otherwise with a row in this response, so a row pushed after its
-            // page went by is not taken for one the server lacks.
+        let first = (full && progress == nil) || (scoped && refreshing?.after == nil)
+        if first { try db.execute(sql: "DELETE FROM _seen") }
+        if response.snapshot, !first {
+            // A write acked with a later page landed after the cursor this snapshot ends on, so the next delta says what
+            // became of its row, and its page may already have gone by: the snapshot's silence is no verdict. A write
+            // acked with the first page landed before any page was read, so the snapshot itself is the verdict.
             try db.execute(sql: "INSERT OR IGNORE INTO _seen (\"table\", id) SELECT \"table\", id FROM _outbox WHERE seq <= ?", arguments: [acked])
         }
         try db.execute(sql: "DELETE FROM _outbox WHERE seq <= ?", arguments: [acked])
