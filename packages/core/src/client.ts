@@ -48,6 +48,13 @@ export type Client = {
 const SEEN_DDL =
 	'CREATE TABLE IF NOT EXISTS _seen ("table" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY ("table", id)) WITHOUT ROWID';
 
+/**
+ * The values `_seen` was last written for. Another engine version that applies a page moves one of them without
+ * recording the rows it stored, as a build from before `_seen` does after a rollback, so a mismatch at migrate means
+ * `_seen` no longer describes the pages in the database.
+ */
+const SEEN_FOR = `(SELECT group_concat(coalesce((SELECT value FROM _meta WHERE key = name), ''), char(10)) FROM (SELECT 'cursor' AS name UNION ALL SELECT 'after' UNION ALL SELECT 'snapshot_head' UNION ALL SELECT 'refresh'))`;
+
 type Group = { table: string; id: string; seq: number; ops: string[]; cols: Set<string> };
 
 export function createClient(driver: SqlDriver, schema: Schema): Client {
@@ -142,9 +149,10 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 			const first = (full && !progress) || (scoped && !refreshing?.after);
 			if (first) driver.exec('DELETE FROM _seen');
 			if (response.snapshot && !first) {
-				// A write acked with a later page landed after the cursor this snapshot ends on, so the next delta says
-				// what became of its row, and its page may already have gone by: the snapshot's silence is no verdict. A
-				// write acked with the first page landed before any page was read, so the snapshot itself is the verdict.
+				// The page of a row pushed with a later page may already have gone by, so the snapshot's silence is no
+				// verdict on it. A write that landed did so after the cursor this snapshot ends on, and the next delta
+				// says what became of its row. One that did not land comes back as a row of this response. A write acked
+				// with the first page landed before any page was read, so the snapshot itself is the verdict.
 				driver.exec('INSERT OR IGNORE INTO _seen ("table", id) SELECT "table", id FROM _outbox WHERE seq <= ?', [
 					acked,
 				]);
@@ -210,6 +218,7 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 				dropMeta('after', 'snapshot_head');
 				more = false;
 			}
+			driver.exec(`INSERT OR REPLACE INTO _meta (key, value) VALUES ('seen', ${SEEN_FOR})`);
 			setMeta('applying', 0);
 			return { tables: touched, more };
 		});
@@ -221,14 +230,18 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 	return {
 		migrate: () =>
 			driver.transaction(() => {
-				const tracked = driver.exec('PRAGMA table_info(_seen)').length > 0;
 				const grown = migrate(driver, schema, 'client');
 				driver.exec(SEEN_DDL);
 				start();
 				const paging = snapshot() !== null;
-				// A snapshot begun before `_seen` existed emptied the tables on its first page and recorded none of the rows
-				// that followed, so its last page would take them for rows the server lacks.
-				if (!grown.length && (tracked || !paging)) return;
+				const pulling = refresh();
+				// Pages another engine version applied are not in `_seen`, so the last page would take their rows for
+				// rows the server lacks: a snapshot starts over, and a refresh starts its pages over.
+				const untracked =
+					(paging || pulling?.after !== undefined) &&
+					driver.exec(`SELECT (SELECT value FROM _meta WHERE key = 'seen') IS ${SEEN_FOR} AS same`)[0]!.same === 0;
+				if (untracked && pulling) setMeta('refresh', JSON.stringify({ tables: pulling.tables }));
+				if (!grown.length && !(untracked && paging)) return;
 				// Rows pulled before a table or a column existed were stored without it, and a delta resends a row only
 				// when it changes, so the grown tables are pulled whole again. A cursor that gets a full snapshot anyway,
 				// or one in progress whose earlier pages predate the growth, starts that snapshot over instead.

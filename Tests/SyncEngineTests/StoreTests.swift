@@ -106,16 +106,26 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(try pool.outbox(), [])
     }
 
-    func testASnapshotBegunBeforeTheStoreRecordedTheRowsItSawStartsOver() throws {
+    func testPagesAnotherEngineVersionAppliedAreNotTrustedSoTheSnapshotStartsOver() throws {
         let (pool, store) = try Fixture.migratedPool()
         try pool.apply(Fixture.response(head: 8, snapshot: true, rows: [Fixture.note("n1", title: "a")], next: After(table: "notes", id: "n1")), store)
-        // What a store from before `_seen` leaves behind when the app is updated between two pages.
-        try pool.sql("DROP TABLE _seen")
+        // What a build from before `_seen` leaves after it applied the next page: `after` moved, `_seen` did not.
+        try pool.sql(#"UPDATE _meta SET value = '{"id":"n3","table":"notes"}' WHERE key = 'after'"#)
 
         try pool.write { try store.migrate($0) }
         let request = try pool.read { try store.request(client: "c", writes: [], $0) }
         XCTAssertEqual(request.cursor, 0)
         XCTAssertNil(request.after)
+    }
+
+    func testARefreshWhoseCursorAnotherEngineVersionMovedStartsItsPagesOver() throws {
+        let (pool, store) = try grown()
+        try pool.apply(Fixture.response(head: 9, snapshot: true, rows: [Fixture.note("n1", title: "a", stars: 3)], next: After(table: "notes", id: "n1"), tables: ["notes"]), store)
+        // A build from before refresh ignores `_meta.refresh` and pulls a delta, which moves the cursor.
+        try pool.sql("UPDATE _meta SET value = 7 WHERE key = 'cursor'")
+
+        try pool.write { try store.migrate($0) }
+        XCTAssertEqual(try pool.read { try store.refresh($0) }, Refresh(tables: ["notes"]))
     }
 
     func testASnapshotOfRowsTheStoreAlreadyHoldsFiresNoObservationOnAnyPage() throws {

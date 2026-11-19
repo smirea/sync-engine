@@ -379,8 +379,12 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 			const acked = Number(driver.exec('SELECT seq FROM _clients WHERE client = ?', [request.client])[0]?.seq ?? 0);
 			let last = acked;
 			const fresh: Write[] = [];
+			const replayed: Write[] = [];
 			for (const write of request.writes.toSorted((x, y) => x.seq - y.seq)) {
-				if (write.seq <= last) continue;
+				if (write.seq <= last) {
+					replayed.push(write);
+					continue;
+				}
 				last = write.seq;
 				fresh.push(write);
 			}
@@ -417,8 +421,9 @@ export function createSpace<C = void>(driver: SqlDriver, schema: Schema, options
 					? snapshot(schema.tables, after, paged ? pageSize : null)
 					: { rows: delta(request.cursor), next: null };
 			const view = hooks.view?.(context);
-			// A skipped write was acked without landing, so the client gets the server's row back like a refused one.
-			const repaired = [...rejected, ...skipped];
+			// A skipped write was acked without landing, so the client gets the server's row back like a refused one. So
+			// does a replayed write: the response that told the client whether it landed, and with which row, was lost.
+			const repaired = [...rejected, ...skipped, ...replayed];
 			let rows = withRejected(
 				view?.expand && !snapshotting ? [...page.rows, ...view.expand(page.rows)] : page.rows,
 				repaired,

@@ -697,35 +697,47 @@ describe('a snapshot keeps what it does not change', () => {
 	test('a put that landed in a lost response and was deleted by another device goes with the snapshot', () => {
 		const { server, a, b } = setup();
 		insert(b, 'n1', 'lands, but b never hears');
-		server.sync(b.client.request(b.client.collect().writes));
+		const batch = b.client.collect();
+		server.sync(b.client.request(batch.writes));
 		a.pull();
 		a.db.exec("DELETE FROM notes WHERE id = 'n1'");
 		a.sync();
 
-		const retry = b.sync();
-		expect({ snapshot: retry.snapshot, acked: retry.acked, rows: retry.rows }).toEqual({
-			snapshot: true,
-			acked: 1,
-			rows: [],
-		});
+		// A server from before replays were answered with a row acks the retry and says nothing about n1.
+		const retry = { ...server.sync(b.client.request(batch.writes)), rows: [] };
+		expect({ snapshot: retry.snapshot, acked: retry.acked }).toEqual({ snapshot: true, acked: 1 });
+		b.client.apply(retry, batch.acked);
 		expect(b.rows()).toEqual([]);
 		expect(b.client.pending()).toBe(0);
 	});
 
-	test('a snapshot begun before the client recorded the rows it saw starts over', () => {
+	test('an edit of a row the server dropped is undone even when the response that said so was lost', () => {
+		const { server, b } = behindTheHorizon(a => a.db.exec("DELETE FROM notes WHERE id = 'n4'"));
+		update(b, 'n4', 'title', 'edited while the snapshot still showed it');
+		b.pull();
+		expect(noteIds(b)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5']);
+
+		const lost = server.sync(b.client.request(b.client.collect().writes));
+		expect(lost.rows).toEqual([{ table: 'notes', id: 'n4', deleted: 1 }]);
+		const retry = b.sync();
+		expect({ acked: retry.acked, rows: retry.rows }).toEqual({ acked: lost.acked, rows: lost.rows });
+		expect(b.rows()).toEqual(server.dump().notes!);
+	});
+
+	test('pages another engine version applied are not trusted: the snapshot starts over', () => {
 		const { server, a, b } = setup(schema, { pageSize: 2 });
-		for (let i = 1; i <= 3; i++) insert(a, `n${i}`, `note ${i}`);
+		for (let i = 1; i <= 5; i++) insert(a, `n${i}`, `note ${i}`);
 		a.sync();
 		step(server, b.client);
-		// What a client from before `_seen` leaves behind when it is updated between two pages.
-		b.db.exec('DROP TABLE _seen');
+		// What a build from before `_seen` leaves after it applied the next page: `after` moved, `_seen` did not.
+		b.db.exec(`UPDATE _meta SET value = '{"table":"notes","id":"n4"}' WHERE key = 'after'`);
 
 		const updated = createClient(b.db, schema);
 		updated.migrate();
 		expect(updated.request([])).toMatchObject({ cursor: 0 });
 		expect(updated.snapshot()).toBeNull();
 		syncPages(server, updated);
-		expect(noteIds(b)).toEqual(['n1', 'n2', 'n3']);
+		expect(noteIds(b)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5']);
 	});
 });
 
@@ -828,6 +840,18 @@ describe('refresh', () => {
 		expect(b.local()).toEqual(server.dump());
 		expect(b.client.refresh()).toBeNull();
 		expect(b.client.cursor()).toBe(server.head());
+	});
+
+	test('a refresh whose cursor another engine version moved starts its pages over', () => {
+		const { server, b } = grown({ pageSize: 2 });
+		step(server, b.client);
+		expect(b.client.refresh()).toMatchObject({ after: { table: 'labels', id: 'l2' } });
+		// A build from before refresh ignores `_meta.refresh` and pulls a delta, which moves the cursor.
+		b.db.exec("UPDATE _meta SET value = value + 1 WHERE key = 'cursor'");
+
+		const updated = createClient(b.db, after);
+		updated.migrate();
+		expect(updated.refresh()).toEqual({ tables: ['labels', 'items'] });
 	});
 
 	test('a refresh holds only the named tables the server has', () => {

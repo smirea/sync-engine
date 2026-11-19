@@ -26,9 +26,16 @@ struct SyncStore: Sendable {
         tables = Dictionary(uniqueKeysWithValues: schema.tables.map { ($0.name, $0) })
     }
 
+    /// The values `_seen` was last written for. Another engine version that applies a page moves one of them without
+    /// recording the rows it stored, as a build from before `_seen` does after a rollback, so a mismatch at migrate
+    /// means `_seen` no longer describes the pages in the database.
+    private static let seenFor = """
+    (SELECT group_concat(coalesce((SELECT value FROM _meta WHERE key = name), ''), char(10)) \
+    FROM (SELECT 'cursor' AS name UNION ALL SELECT 'after' UNION ALL SELECT 'snapshot_head' UNION ALL SELECT 'refresh'))
+    """
+
     /// The generator emits the `ALTER TABLE` for a grown schema; the client only makes rerunning it harmless.
     func migrate(_ db: Database) throws {
-        let tracked = try !columns(of: "_seen", db).isEmpty
         let grown = try schema.tables.filter { !Set(["id"] + $0.columns).isSubset(of: try columns(of: $0.name, db)) }.map(\.name)
         let addColumn = /^\s*ALTER\s+TABLE\s+"?(\w+)"?\s+ADD\s+COLUMN\s+"?(\w+)"?/.ignoresCase()
         for statement in schema.statements {
@@ -49,9 +56,13 @@ struct SyncStore: Sendable {
         try db.execute(sql: "CREATE TABLE IF NOT EXISTS _seen (\"table\" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (\"table\", id)) WITHOUT ROWID")
         try db.execute(sql: "INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", arguments: [UUID().uuidString.lowercased()])
         let paging = try snapshot(db) != nil
-        // A snapshot begun before `_seen` existed emptied the tables on its first page and recorded none of the rows that
-        // followed, so its last page would take them for rows the server lacks.
-        guard !grown.isEmpty || (!tracked && paging) else { return }
+        let pulling = try refresh(db)
+        // Pages another engine version applied are not in `_seen`, so the last page would take their rows for rows the
+        // server lacks: a snapshot starts over, and a refresh starts its pages over.
+        let untracked = try (paging || pulling?.after != nil)
+            && !Bool.fetchOne(db, sql: "SELECT (SELECT value FROM _meta WHERE key = 'seen') IS \(Self.seenFor)")!
+        if untracked, let pulling { try setRefresh(Refresh(tables: pulling.tables), db) }
+        guard !grown.isEmpty || (untracked && paging) else { return }
         // Rows pulled before a table or a column existed were stored without it, and a delta resends a row only when it
         // changes, so the grown tables are pulled whole again. A cursor that gets a full snapshot anyway, or one in
         // progress whose earlier pages predate the growth, starts that snapshot over instead.
@@ -183,9 +194,10 @@ struct SyncStore: Sendable {
         let first = (full && progress == nil) || (scoped && refreshing?.after == nil)
         if first { try db.execute(sql: "DELETE FROM _seen") }
         if response.snapshot, !first {
-            // A write acked with a later page landed after the cursor this snapshot ends on, so the next delta says what
-            // became of its row, and its page may already have gone by: the snapshot's silence is no verdict. A write
-            // acked with the first page landed before any page was read, so the snapshot itself is the verdict.
+            // The page of a row pushed with a later page may already have gone by, so the snapshot's silence is no verdict
+            // on it. A write that landed did so after the cursor this snapshot ends on, and the next delta says what
+            // became of its row. One that did not land comes back as a row of this response. A write acked with the
+            // first page landed before any page was read, so the snapshot itself is the verdict.
             try db.execute(sql: "INSERT OR IGNORE INTO _seen (\"table\", id) SELECT \"table\", id FROM _outbox WHERE seq <= ?", arguments: [acked])
         }
         try db.execute(sql: "DELETE FROM _outbox WHERE seq <= ?", arguments: [acked])
@@ -258,6 +270,7 @@ struct SyncStore: Sendable {
             try db.execute(sql: "DELETE FROM _meta WHERE key IN ('after', 'snapshot_head')")
             more = false
         }
+        try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('seen', \(Self.seenFor))")
         try db.execute(sql: "INSERT OR REPLACE INTO _meta (key, value) VALUES ('applying', 0)")
         return more
     }
