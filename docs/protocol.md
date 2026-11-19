@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS _seen ("table" TEXT NOT NULL, id TEXT NOT NULL, PRIMA
 - `applying`: 1 while pulled rows are being written, else absent or 0.
 - `space`: the `space` of the last response that carried one, absent before the first.
 - `after` and `snapshot_head`: present together only while a paged snapshot is in progress. `after` is the JSON `{"table": ..., "id": ...}` of the last row received, `snapshot_head` the `head` of the snapshot's first page. Both are written and cleared in the same transaction as the rows they describe.
-- `refresh`: present only while tables the schema grew are still to be pulled whole. It is the JSON `{"tables": [...], "after": {"table": ..., "id": ...}}`, sent as the request's `refresh`, with `after` present once a page of them has landed. A full snapshot in progress and `refresh` never exist together.
+- `refresh`: present only while tables the schema grew are still to be pulled whole. It is the JSON `{"tables": [...], "after": {"table": ..., "id": ...}}`, sent as the request's `refresh`, with `after` present once a page of them has landed. The client never leaves a full snapshot in progress and `refresh` set together.
+- `seen`: the `cursor`, `after`, `snapshot_head` and `refresh` values as the last apply left them, which are the values `_seen` was written for. Migrate compares it with the current values.
 
 Writes are captured by generated triggers, one set per app table, so no client code can forget to queue a change:
 
@@ -129,12 +130,12 @@ A client with `_meta.refresh` and no snapshot in progress sends that value as `r
 
 In one transaction, in ascending `seq` order (the server sorts the batch, since coalescing emits groups in first-seen order with each group's largest `seq`), for each write:
 
-1. If `seq <= _clients[client]`, skip it, and otherwise set `_clients[client] := seq` before the next write. This is the exactly-once replay rule, and it is what the Bend model proves.
+1. If `seq <= _clients[client]`, skip it as a replay, and otherwise set `_clients[client] := seq` before the next write. This is the exactly-once replay rule, and it is what the Bend model proves.
 2. Validate: known table, known op, column names filtered to the schema, storage class per column, `NOT NULL` respected, the app's optional validator per column (for JSON shapes). An `id` validator runs against the write's `id` for `put` and `patch`, and its failure reads `id: <message>`. A failure puts `{ seq, table, id, reason }` into `rejected` and the write is otherwise skipped.
 3. `put`: upsert the full row with `INSERT ... ON CONFLICT (id) DO UPDATE SET` every column (missing nullable columns become their default or null). Never `INSERT OR REPLACE`: it is a delete plus an insert and cascades through foreign keys. `patch`: `UPDATE` the named columns; if no row exists, the write is a no-op and not counted. `delete`: `DELETE`, counted even when no row exists, so the tombstone reaches clients that still hold the row.
 4. For a counted write: `head := head + 1`, `_changes[(table, id)] := (head, deleted)`, and one `_log` row.
 5. `_clients[client] := max(_clients[client], max(seq) over the batch)`, applied even when writes were rejected or no-ops, so the client clears its outbox. `acked` in the response is that stored value.
-6. For every rejected write, the current server row or tombstone for its `(table, id)` is included in `rows` whatever its `seq`, so the client replaces the value the server refused. A rejected row whose `_changes` entry was compacted comes back as a tombstone.
+6. For every rejected, skipped or replayed write, the current server row or tombstone for its `(table, id)` is included in `rows` whatever its `seq`, so the client replaces the value the server did not take. A replay gets one because the response that said whether the write landed, and with which row, never reached the client. A row whose `_changes` entry was compacted comes back as a tombstone.
 
 Then the pull (below), then compaction when due.
 
@@ -172,7 +173,7 @@ Every protocol 2 response carries `space`.
 
 - Delta: `snapshot` is `false`, `rows` are every `_changes` entry with `seq > cursor` joined with the current full row, `next` is `null`.
 - Full snapshot: `snapshot` is `true`, `rows` holds live rows only, in schema table order then by `id` (SQLite's default text order), starting after `after` when the request carried one, at most `pageSize` rows (space option, default 1000). `next` is the `{ table, id }` of the last row when more rows follow, else `null`. Every page carries the current `head`.
-- Refresh: a snapshot of the tables `refresh.tables` names that the server has, in the same order and pages, starting after `refresh.after`. `snapshot` is `true` and `tables` lists those tables in schema order, which is how the client tells a refresh from a full snapshot. A name the server does not have is skipped, so `tables` and `rows` may be empty. No other response carries `tables`.
+- Refresh: a snapshot of the tables `refresh.tables` names that the server has, in the same order and pages, starting after `refresh.after`. `snapshot` is `true` and `tables` lists those tables in schema order, which is how the client tells a refresh from a full snapshot. A name the server does not have is skipped, so `tables` and `rows` may be empty. The rows of step 6 of the server apply ride along as in any response, also when their table is not one of `tables`. No other response carries `tables`.
 
 Status codes: 200 on success even with rejections; 400 for a body that is not this shape; 401 from the app's auth; 426 when `protocol` is not 1 or 2.
 
@@ -184,7 +185,7 @@ Otherwise, in one transaction:
 
 1. Set `_meta.applying = 1`. If the response carries a `space` other than `_meta.space`, store it and delete `after`, `snapshot_head` and `refresh`: the server restarted from the first page of a full snapshot. Then read what is in progress: `after` with `snapshot_head` is a full snapshot, `refresh` is a refresh.
 2. Name the response. `snapshot` with `tables` is a refresh page. `snapshot` without `tables` is a full snapshot page, and it deletes `_meta.refresh`, since it holds those tables too. Anything else is a delta. Empty `_seen` on a first page: a full snapshot page with no full snapshot in progress, or a refresh page with no `refresh.after` stored.
-3. On a snapshot page of either kind that is not a first page, copy the key of every `_outbox` row with `seq <= acked` into `_seen`. A write acked with a later page landed after the cursor the snapshot ends on, so the next delta says what became of its row, and its page may already have gone by. A write acked with the first page gets no such entry: it landed before any page was read, also when the ack is the replay of a request whose response was lost, so the snapshot holds its row or the row is gone. Then delete `_outbox` rows with `seq <= acked`.
+3. On a snapshot page of either kind that is not a first page, copy the key of every `_outbox` row with `seq <= acked` into `_seen`. The page of such a row may already have gone by, so the snapshot's silence says nothing about it. A write that landed did so after the cursor the snapshot ends on, and the next delta says what became of its row. A write that did not land comes back as a row of the same response. A write acked with the first page gets no such entry: it landed before any page was read, also when the ack is the replay of a request whose response was lost, so the snapshot holds its row or the row is gone. Then delete `_outbox` rows with `seq <= acked`.
 4. For each row, skip it when `_outbox` still holds an entry for its `(table, id)` (the next sync re-sends that write and the row comes back merged); otherwise `DELETE` for a tombstone or upsert (`INSERT ... ON CONFLICT (id) DO UPDATE SET ... WHERE (columns) IS NOT (excluded columns)`) for a live row, and on a snapshot page add the live row's key to `_seen`. The `WHERE` leaves a row whose values already match untouched, so neither the echo of the client's own write nor a snapshot of a row the client already holds fires an update hook.
 5. On a snapshot page with `next` null, the snapshot is whole. In every app table for a full snapshot, or in every table of `tables` for a refresh, delete the rows that are neither in `_seen` nor named by an `_outbox` entry, then empty `_seen`. No page deletes rows before this one: a snapshot never empties a table first.
 6. Store where the sync stands:
@@ -192,11 +193,11 @@ Otherwise, in one transaction:
    - Full snapshot page with `next`: `_meta.after := next` and `_meta.snapshot_head := snapshot_head ?? head`, `_meta.cursor` left alone. Another request follows.
    - Delta while `_meta.refresh` is set: the server is older than refresh and dropped the field. Set `_meta.cursor := 0` and delete `_meta.refresh`, so the next request takes a full snapshot. Another request follows.
    - Otherwise (a delta, or the last page of a full snapshot): `_meta.cursor := snapshot_head ?? head` and delete `after` and `snapshot_head`. The sync is done.
-7. Set `_meta.applying = 0`. Then notify observers of the tables where a row was inserted, updated or deleted.
+7. Set `_meta.seen` to the `cursor`, `after`, `snapshot_head` and `refresh` values now stored, and `_meta.applying = 0`. Then notify observers of the tables where a row was inserted, updated or deleted.
 
 The cursor lands on the **first** page's head, not the last, so a row that changed while later pages were fetched is re-pulled by the next delta. A refresh leaves the cursor where it was for the same reason: the delta from it follows the last refresh page in the same sync and brings every row that changed since, in the refreshed tables and outside them.
 
-A client that first runs this apply with a full snapshot in progress and no `_seen` table (an install updated between two pages) starts that snapshot over at migrate. Its earlier pages emptied the tables under the previous rule and recorded nothing, so step 5 would delete their rows.
+Migrate trusts `_seen` only when `_meta.seen` equals the stored `cursor`, `after`, `snapshot_head` and `refresh`. A client from before `_seen` wrote no `_meta.seen`, emptied the tables on its first page and recorded no row, so step 5 would delete the rows of its pages. The same holds for such a build that runs between two launches of this one, as after a rollback: it moves `after` or the cursor and leaves `_meta.seen` behind. On a mismatch a full snapshot in progress starts over at cursor 0, and a refresh that has `after` drops it and starts its pages over.
 
 ### Refresh
 
