@@ -41,6 +41,13 @@ export type Client = {
 	reset(): Set<string>;
 };
 
+/**
+ * The rows a snapshot in progress has delivered. The client creates it, not the schema's DDL: no generated statement
+ * names it, and an app that ships that DDL as a generated file pins the generator and the client separately.
+ */
+const SEEN_DDL =
+	'CREATE TABLE IF NOT EXISTS _seen ("table" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY ("table", id)) WITHOUT ROWID';
+
 type Group = { table: string; id: string; seq: number; ops: string[]; cols: Set<string> };
 
 export function createClient(driver: SqlDriver, schema: Schema): Client {
@@ -214,6 +221,7 @@ export function createClient(driver: SqlDriver, schema: Schema): Client {
 			driver.transaction(() => {
 				const tracked = driver.exec('PRAGMA table_info(_seen)').length > 0;
 				const grown = migrate(driver, schema, 'client');
+				driver.exec(SEEN_DDL);
 				start();
 				const paging = snapshot() !== null;
 				// A snapshot begun before `_seen` existed emptied the tables on its first page and recorded none of the rows

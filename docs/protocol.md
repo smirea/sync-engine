@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value);
 CREATE TABLE IF NOT EXISTS _seen ("table" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY ("table", id)) WITHOUT ROWID;
 ```
 
-`_seen` holds the key of every live row a snapshot in progress has delivered. It is empty between snapshots.
+`_seen` holds the key of every live row a snapshot in progress has delivered. It is empty between snapshots. The client's migrate creates it. It is not part of the schema's client DDL or of a generated `SyncSchema.swift`, since no trigger names it.
 
 `_meta` holds:
 

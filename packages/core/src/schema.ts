@@ -108,7 +108,6 @@ const SERVER_DDL = [
 const CLIENT_DDL = [
 	'CREATE TABLE IF NOT EXISTS _outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, "table" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, col TEXT)',
 	'CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)',
-	'CREATE TABLE IF NOT EXISTS _seen ("table" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY ("table", id)) WITHOUT ROWID',
 ];
 
 const NOT_APPLYING = "coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0";

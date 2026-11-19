@@ -44,9 +44,9 @@ struct SyncStore: Sendable {
                 throw SyncSchemaError(description: "\(table.name).\(missing) is in the schema but not in the database; the DDL must add it")
             }
         }
-        if try columns(of: "_seen", db).isEmpty {
-            throw SyncSchemaError(description: "_seen is not in the database; regenerate SyncSchema.swift with this version of sync-engine")
-        }
+        // The store's own table, which no generated statement names: an app pins the generator and this package
+        // separately, so DDL the generator had to emit could be missing under a newer store.
+        try db.execute(sql: "CREATE TABLE IF NOT EXISTS _seen (\"table\" TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (\"table\", id)) WITHOUT ROWID")
         try db.execute(sql: "INSERT OR IGNORE INTO _meta (key, value) VALUES ('client', ?), ('cursor', 0)", arguments: [UUID().uuidString.lowercased()])
         let paging = try snapshot(db) != nil
         // A snapshot begun before `_seen` existed emptied the tables on its first page and recorded none of the rows that
