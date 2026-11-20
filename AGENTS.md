@@ -8,7 +8,7 @@
 Full rules in [`docs/decisions/workflow.md`](docs/decisions/workflow.md).
 
 - One PR per thread, never stacked. Rebase only when GitHub reports a real conflict.
-- After opening a PR, run `pr-ship [--merge]` (shared, from `~/code/scripts`) in the foreground until it exits 0. Its exit code names the next step.
+- After opening a PR: In a main T3 thread, wait with `watch_pull_request` (`until: "merged"`) and run `pr-ship --once --merge` (shared, from `~/code/scripts`) on each wake; a delegated child can't watch, so it runs `pr-ship --merge` in the foreground until it exits 0. Its exit code names the next step.
 - Never skip git hooks. Fix the failure instead.
 - Run only the relevant tests locally; CI runs the full suite.
 - `packages/client-web/web.test.ts` is the browser-runtime exception the `tests` skill allows: sync logic that runs only in a page, a worker and OPFS. It never drives UI, never runs in a hook, and runs as its own CI job (`bun run test:web`).
