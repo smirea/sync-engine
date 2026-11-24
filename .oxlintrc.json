@@ -1,27 +1,28 @@
 {
-	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	"plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node"],
-	"categories": {
-		"correctness": "error",
-		"suspicious": "warn",
-		"perf": "warn"
-	},
-	"rules": {
-		"no-unused-vars": "warn",
-		"no-console": "off",
-		"unicorn/no-null": "off",
-		"unicorn/prefer-top-level-await": "off",
-		"unicorn/filename-case": "off",
-		"node/no-process-env": "error",
-		"typescript/triple-slash-reference": ["error", { "path": "always" }]
-	},
-	"overrides": [
-		{
-			"files": ["**/env.ts", "scripts/**", ".claude/**"],
-			"rules": {
-				"node/no-process-env": "off"
-			}
-		}
-	],
-	"ignorePatterns": ["node_modules", "dist", "build", "generated", "**/generated", "**/*.generated.ts", "**/*.gen.ts"]
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "build",
+    "out",
+    ".svelte-kit",
+    "**/.svelte-kit",
+    "generated",
+    "**/generated",
+    "**/*.generated.ts",
+    "**/*.gen.ts",
+    ".build",
+    ".swiftpm",
+    "DerivedData",
+    "**/DerivedData",
+    "spec/vectors.json",
+    "spec/sync.mjs"
+  ]
 }

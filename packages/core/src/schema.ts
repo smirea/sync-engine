@@ -1,15 +1,15 @@
-import { getTableColumns, getTableName, is, SQL } from 'drizzle-orm';
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
-import type { ZodType } from 'zod';
-import type { Column, Schema, SqlDriver, StorageClass, Table, Value } from './types.ts';
+import { getTableColumns, getTableName, is, SQL } from "drizzle-orm";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import type { ZodType } from "zod";
+import type { Column, Schema, SqlDriver, StorageClass, Table, Value } from "./types.ts";
 
 const STORAGE: Record<string, StorageClass> = {
-	SQLiteText: 'TEXT',
-	SQLiteTextJson: 'TEXT',
-	SQLiteInteger: 'INTEGER',
-	SQLiteTimestamp: 'INTEGER',
-	SQLiteBoolean: 'INTEGER',
-	SQLiteReal: 'REAL',
+  SQLiteText: "TEXT",
+  SQLiteTextJson: "TEXT",
+  SQLiteInteger: "INTEGER",
+  SQLiteTimestamp: "INTEGER",
+  SQLiteBoolean: "INTEGER",
+  SQLiteReal: "REAL",
 };
 const NAME = /^[a-z_][a-z0-9_]*$/;
 /**
@@ -17,114 +17,148 @@ const NAME = /^[a-z_][a-z0-9_]*$/;
  * `order` would fail only once a database runs the statement; it fails here, when the schema is defined.
  */
 const KEYWORDS = new Set(
-	'abort action add after all alter always analyze and as asc attach autoincrement before begin between by cascade case cast check collate column commit conflict constraint create cross current current_date current_time current_timestamp database default deferrable deferred delete desc detach distinct do drop each else end escape except exclude exclusive exists explain fail filter first following for foreign from full generated glob group groups having if ignore immediate in index indexed initially inner insert instead intersect into is isnull join key last left like limit match materialized natural no not nothing notnull null nulls of offset on or order others outer over partition plan pragma preceding primary query raise range recursive references regexp reindex release rename replace restrict returning right rollback row rows savepoint select set table temp temporary then ties to transaction trigger unbounded union unique update using vacuum values view virtual when where window with without'.split(
-		' ',
-	),
+  "abort action add after all alter always analyze and as asc attach autoincrement before begin between by cascade case cast check collate column commit conflict constraint create cross current current_date current_time current_timestamp database default deferrable deferred delete desc detach distinct do drop each else end escape except exclude exclusive exists explain fail filter first following for foreign from full generated glob group groups having if ignore immediate in index indexed initially inner insert instead intersect into is isnull join key last left like limit match materialized natural no not nothing notnull null nulls of offset on or order others outer over partition plan pragma preceding primary query raise range recursive references regexp reindex release rename replace restrict returning right rollback row rows savepoint select set table temp temporary then ties to transaction trigger unbounded union unique update using vacuum values view virtual when where window with without".split(
+    " ",
+  ),
 );
 const checkName = (where: string, name: string) => {
-	if (!NAME.test(name)) throw new Error(`${where}: name ${name} must match ${NAME}`);
-	if (KEYWORDS.has(name)) throw new Error(`${where}: ${name} is an SQLite keyword, which the engine never quotes`);
+  if (!NAME.test(name)) throw new Error(`${where}: name ${name} must match ${NAME}`);
+  if (KEYWORDS.has(name))
+    throw new Error(`${where}: ${name} is an SQLite keyword, which the engine never quotes`);
 };
 
-type DrizzleColumn = { name: string; columnType: string; notNull: boolean; primary: boolean; default: unknown };
+type DrizzleColumn = {
+  name: string;
+  columnType: string;
+  notNull: boolean;
+  primary: boolean;
+  default: unknown;
+};
 type Tables = Record<string, SQLiteTable>;
-type Validators<T extends Tables> = { [K in keyof T]?: { [C in keyof T[K]['_']['columns']]?: ZodType } };
+type Validators<T extends Tables> = {
+  [K in keyof T]?: { [C in keyof T[K]["_"]["columns"]]?: ZodType };
+};
 
 function plainDefault(where: string, raw: unknown, json: boolean): Value | undefined {
-	if (raw === undefined) return undefined;
-	if (is(raw, SQL)) throw new Error(`${where}: sql defaults are not supported, use a plain value`);
-	if (json) return JSON.stringify(raw);
-	if (typeof raw === 'boolean') return raw ? 1 : 0;
-	if (typeof raw === 'string' || typeof raw === 'number' || raw === null) return raw;
-	throw new Error(`${where}: unsupported default ${String(raw)}`);
+  if (raw === undefined) return undefined;
+  if (is(raw, SQL)) throw new Error(`${where}: sql defaults are not supported, use a plain value`);
+  if (json) return JSON.stringify(raw);
+  if (typeof raw === "boolean") return raw ? 1 : 0;
+  if (typeof raw === "string" || typeof raw === "number" || raw === null) return raw;
+  throw new Error(`${where}: unsupported default ${String(raw)}`);
 }
 
-function toColumn(table: string, key: string, column: DrizzleColumn, validate: ZodType | undefined): Column {
-	const where = `${table}.${key}`;
-	checkName(where, column.name);
-	const type = STORAGE[column.columnType];
-	if (!type)
-		throw new Error(`${where}: ${column.columnType} has no SQLite storage class here (use text, integer or real)`);
-	const json = column.columnType === 'SQLiteTextJson';
-	const out: Column = { name: column.name, type, notNull: column.notNull, json };
-	const fallback = plainDefault(where, column.default, json);
-	if (fallback !== undefined) out.default = fallback;
-	if (validate) out.validate = validate;
-	return out;
+function toColumn(
+  table: string,
+  key: string,
+  column: DrizzleColumn,
+  validate: ZodType | undefined,
+): Column {
+  const where = `${table}.${key}`;
+  checkName(where, column.name);
+  const type = STORAGE[column.columnType];
+  if (!type)
+    throw new Error(
+      `${where}: ${column.columnType} has no SQLite storage class here (use text, integer or real)`,
+    );
+  const json = column.columnType === "SQLiteTextJson";
+  const out: Column = { name: column.name, type, notNull: column.notNull, json };
+  const fallback = plainDefault(where, column.default, json);
+  if (fallback !== undefined) out.default = fallback;
+  if (validate) out.validate = validate;
+  return out;
 }
 
 function toTable(table: SQLiteTable, validators: Record<string, ZodType | undefined>): Table {
-	const name = getTableName(table);
-	checkName(`table ${name}`, name);
-	const entries = Object.entries(getTableColumns(table) as Record<string, DrizzleColumn>);
-	for (const key of Object.keys(validators)) {
-		if (!entries.some(([k]) => k === key)) throw new Error(`${name}.${key}: values names a column the table lacks`);
-	}
-	const id = entries.find(([, column]) => column.name === 'id');
-	if (!id || !id[1].primary || id[1].columnType !== 'SQLiteText') {
-		throw new Error(`${name}: every synced table needs id TEXT PRIMARY KEY`);
-	}
-	const rest = entries.filter(entry => entry !== id);
-	return { name, columns: [id, ...rest].map(([key, column]) => toColumn(name, key, column, validators[key])) };
+  const name = getTableName(table);
+  checkName(`table ${name}`, name);
+  const entries = Object.entries(getTableColumns(table) as Record<string, DrizzleColumn>);
+  for (const key of Object.keys(validators)) {
+    if (!entries.some(([k]) => k === key))
+      throw new Error(`${name}.${key}: values names a column the table lacks`);
+  }
+  const id = entries.find(([, column]) => column.name === "id");
+  if (!id || !id[1].primary || id[1].columnType !== "SQLiteText") {
+    throw new Error(`${name}: every synced table needs id TEXT PRIMARY KEY`);
+  }
+  const rest = entries.filter((entry) => entry !== id);
+  return {
+    name,
+    columns: [id, ...rest].map(([key, column]) => toColumn(name, key, column, validators[key])),
+  };
 }
 
-export function defineSchema<T extends Tables>({ tables, values = {} }: { tables: T; values?: Validators<T> }): Schema {
-	for (const key of Object.keys(values)) {
-		if (!(key in tables)) throw new Error(`values names table ${key}, which tables lacks`);
-	}
-	const list = Object.entries(tables).map(([key, table]) =>
-		toTable(table, (values[key] ?? {}) as Record<string, ZodType | undefined>),
-	);
-	const names = new Set<string>();
-	for (const table of list) {
-		if (names.has(table.name)) throw new Error(`table ${table.name} is defined twice`);
-		names.add(table.name);
-	}
-	return {
-		tables: list,
-		ddl: { app: list.map(createTable), server: SERVER_DDL, client: [...CLIENT_DDL, ...list.flatMap(triggers)] },
-	};
+export function defineSchema<T extends Tables>({
+  tables,
+  values = {},
+}: {
+  tables: T;
+  values?: Validators<T>;
+}): Schema {
+  for (const key of Object.keys(values)) {
+    if (!(key in tables)) throw new Error(`values names table ${key}, which tables lacks`);
+  }
+  const list = Object.entries(tables).map(([key, table]) =>
+    toTable(table, (values[key] ?? {}) as Record<string, ZodType | undefined>),
+  );
+  const names = new Set<string>();
+  for (const table of list) {
+    if (names.has(table.name)) throw new Error(`table ${table.name} is defined twice`);
+    names.add(table.name);
+  }
+  return {
+    tables: list,
+    ddl: {
+      app: list.map(createTable),
+      server: SERVER_DDL,
+      client: [...CLIENT_DDL, ...list.flatMap(triggers)],
+    },
+  };
 }
 
 const literal = (value: Value) =>
-	value === null ? 'NULL' : typeof value === 'number' ? String(value) : `'${value.replaceAll("'", "''")}'`;
+  value === null
+    ? "NULL"
+    : typeof value === "number"
+      ? String(value)
+      : `'${value.replaceAll("'", "''")}'`;
 
 const columnDdl = (column: Column) =>
-	column.name === 'id'
-		? 'id TEXT PRIMARY KEY'
-		: `${column.name} ${column.type}${column.notNull ? ' NOT NULL' : ''}${column.default === undefined ? '' : ` DEFAULT ${literal(column.default)}`}`;
+  column.name === "id"
+    ? "id TEXT PRIMARY KEY"
+    : `${column.name} ${column.type}${column.notNull ? " NOT NULL" : ""}${column.default === undefined ? "" : ` DEFAULT ${literal(column.default)}`}`;
 
 const createTable = (table: Table) =>
-	`CREATE TABLE IF NOT EXISTS ${table.name} (${table.columns.map(columnDdl).join(', ')})`;
+  `CREATE TABLE IF NOT EXISTS ${table.name} (${table.columns.map(columnDdl).join(", ")})`;
 
 const SERVER_DDL = [
-	'CREATE TABLE IF NOT EXISTS _changes ("table" TEXT NOT NULL, id TEXT NOT NULL, seq INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY ("table", id))',
-	'CREATE INDEX IF NOT EXISTS _changes_seq ON _changes (seq)',
-	'CREATE TABLE IF NOT EXISTS _clients (client TEXT PRIMARY KEY, seq INTEGER NOT NULL)',
-	'CREATE TABLE IF NOT EXISTS _log (seq INTEGER PRIMARY KEY, at INTEGER NOT NULL, client TEXT NOT NULL, "table" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, "values" TEXT)',
-	'CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)',
+  'CREATE TABLE IF NOT EXISTS _changes ("table" TEXT NOT NULL, id TEXT NOT NULL, seq INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY ("table", id))',
+  "CREATE INDEX IF NOT EXISTS _changes_seq ON _changes (seq)",
+  "CREATE TABLE IF NOT EXISTS _clients (client TEXT PRIMARY KEY, seq INTEGER NOT NULL)",
+  'CREATE TABLE IF NOT EXISTS _log (seq INTEGER PRIMARY KEY, at INTEGER NOT NULL, client TEXT NOT NULL, "table" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, "values" TEXT)',
+  "CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)",
 ];
 
 const CLIENT_DDL = [
-	'CREATE TABLE IF NOT EXISTS _outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, "table" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, col TEXT)',
-	'CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)',
+  'CREATE TABLE IF NOT EXISTS _outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, "table" TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, col TEXT)',
+  "CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value)",
 ];
 
 const NOT_APPLYING = "coalesce((SELECT value FROM _meta WHERE key = 'applying'), 0) = 0";
 
 function triggers({ name: t, columns }: Table): string[] {
-	const queue = (id: string, op: string, col: string) =>
-		`  BEGIN INSERT INTO _outbox ("table", id, op, col) VALUES ('${t}', ${id}, '${op}', ${col}); END`;
-	return [
-		`CREATE TRIGGER IF NOT EXISTS _ob_i_${t} AFTER INSERT ON ${t}\n  WHEN ${NOT_APPLYING}\n${queue('NEW.id', 'insert', 'NULL')}`,
-		`CREATE TRIGGER IF NOT EXISTS _ob_d_${t} AFTER DELETE ON ${t}\n  WHEN ${NOT_APPLYING}\n${queue('OLD.id', 'delete', 'NULL')}`,
-		...columns
-			.filter(c => c.name !== 'id')
-			.map(
-				({ name: c }) =>
-					`CREATE TRIGGER IF NOT EXISTS _ob_u_${t}_${c} AFTER UPDATE OF ${c} ON ${t}\n  WHEN ${NOT_APPLYING} AND OLD.${c} IS NOT NEW.${c}\n${queue('NEW.id', 'update', `'${c}'`)}`,
-			),
-	];
+  const queue = (id: string, op: string, col: string) =>
+    `  BEGIN INSERT INTO _outbox ("table", id, op, col) VALUES ('${t}', ${id}, '${op}', ${col}); END`;
+  return [
+    `CREATE TRIGGER IF NOT EXISTS _ob_i_${t} AFTER INSERT ON ${t}\n  WHEN ${NOT_APPLYING}\n${queue("NEW.id", "insert", "NULL")}`,
+    `CREATE TRIGGER IF NOT EXISTS _ob_d_${t} AFTER DELETE ON ${t}\n  WHEN ${NOT_APPLYING}\n${queue("OLD.id", "delete", "NULL")}`,
+    ...columns
+      .filter((c) => c.name !== "id")
+      .map(
+        ({ name: c }) =>
+          `CREATE TRIGGER IF NOT EXISTS _ob_u_${t}_${c} AFTER UPDATE OF ${c} ON ${t}\n  WHEN ${NOT_APPLYING} AND OLD.${c} IS NOT NEW.${c}\n${queue("NEW.id", "update", `'${c}'`)}`,
+      ),
+  ];
 }
 
 /**
@@ -132,37 +166,39 @@ function triggers({ name: t, columns }: Table): string[] {
  * client without PRAGMA diffing runs and lets fail on the columns it already has, then the client tables and triggers.
  */
 export const clientStatements = (schema: Schema): string[] => [
-	...schema.tables.flatMap(table => [
-		createTable(table),
-		...table.columns.filter(c => c.name !== 'id').map(c => `ALTER TABLE ${table.name} ADD COLUMN ${columnDdl(c)}`),
-	]),
-	...schema.ddl.client,
+  ...schema.tables.flatMap((table) => [
+    createTable(table),
+    ...table.columns
+      .filter((c) => c.name !== "id")
+      .map((c) => `ALTER TABLE ${table.name} ADD COLUMN ${columnDdl(c)}`),
+  ]),
+  ...schema.ddl.client,
 ];
 
 /**
  * Adds what the database lacks and answers the tables it created or gave a column, which hold rows stored before
  * that shape existed. Runs in the caller's transaction, so a crash cannot leave the shape grown and its cursor kept.
  */
-export function migrate(driver: SqlDriver, schema: Schema, side: 'server' | 'client'): string[] {
-	const grown: string[] = [];
-	for (const [index, table] of schema.tables.entries()) {
-		const present = new Set(driver.exec(`PRAGMA table_info(${table.name})`).map(row => row.name));
-		if (present.size === 0) {
-			driver.exec(schema.ddl.app[index]!);
-			grown.push(table.name);
-			continue;
-		}
-		const missing = table.columns.filter(column => !present.has(column.name));
-		for (const column of missing) {
-			if (column.notNull && column.default === undefined) {
-				throw new Error(
-					`${table.name}.${column.name}: a NOT NULL column without a default cannot be added to an existing table`,
-				);
-			}
-			driver.exec(`ALTER TABLE ${table.name} ADD COLUMN ${columnDdl(column)}`);
-		}
-		if (missing.length) grown.push(table.name);
-	}
-	for (const sql of schema.ddl[side]) driver.exec(sql);
-	return grown;
+export function migrate(driver: SqlDriver, schema: Schema, side: "server" | "client"): string[] {
+  const grown: string[] = [];
+  for (const [index, table] of schema.tables.entries()) {
+    const present = new Set(driver.exec(`PRAGMA table_info(${table.name})`).map((row) => row.name));
+    if (present.size === 0) {
+      driver.exec(schema.ddl.app[index]!);
+      grown.push(table.name);
+      continue;
+    }
+    const missing = table.columns.filter((column) => !present.has(column.name));
+    for (const column of missing) {
+      if (column.notNull && column.default === undefined) {
+        throw new Error(
+          `${table.name}.${column.name}: a NOT NULL column without a default cannot be added to an existing table`,
+        );
+      }
+      driver.exec(`ALTER TABLE ${table.name} ADD COLUMN ${columnDdl(column)}`);
+    }
+    if (missing.length) grown.push(table.name);
+  }
+  for (const sql of schema.ddl[side]) driver.exec(sql);
+  return grown;
 }

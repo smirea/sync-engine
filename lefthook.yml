@@ -1,24 +1,28 @@
 pre-commit:
-  parallel: true
-  commands:
-    # One command: both fixers rewrite the same staged files, and in parallel one would overwrite the other's edit.
-    fix:
-      run: >-
-        bunx oxlint --fix --no-error-on-unmatched-pattern {staged_files}
-        && bunx oxfmt --no-error-on-unmatched-pattern {staged_files}
-      stage_fixed: true
-    typecheck:
-      glob: '*.{js,mjs,mts,ts,tsx,json,jsonc}'
-      run: bun check
-    # The whole suite: it runs in-process in milliseconds, so selecting by diff would save nothing and could miss a
-    # test whose input is not an import, such as spec/vectors.json. Git exports GIT_DIR and GIT_INDEX_FILE to hooks,
-    # so a test that runs git in a temp directory would act on this repository unless they are unset first.
-    test:
-      glob: '*.{js,mjs,mts,ts,tsx,json}'
-      run: unset $(git rev-parse --local-env-vars); bun run test
-    swift:
-      glob: '{Package.swift,Sources/**,Tests/**}'
-      run: unset $(git rev-parse --local-env-vars); swift test
-    spec:
-      glob: 'spec/*'
-      run: bun scripts/spec.ts
+  jobs:
+    # CI and cloud agents don't have the shared command.
+    - name: worktree
+      run: '[ ! -x "$HOME/bin/agent-t3-worktree" ] || "$HOME/bin/agent-t3-worktree" check --heal'
+    - group:
+        parallel: true
+        jobs:
+          - name: fix
+            glob: "*.{js,mjs,mts,ts,tsx,jsx,svelte}"
+            run: bunx oxlint --fix --no-error-on-unmatched-pattern {staged_files}
+            stage_fixed: true
+          - name: typecheck
+            glob: "*.{js,mjs,mts,ts,tsx,svelte,json,jsonc}"
+            run: bun run typecheck
+          # The whole suite: logic tests run in-process in milliseconds, so selecting by diff would save little and
+          # could miss a test whose input is not an import. Git exports GIT_DIR and GIT_INDEX_FILE to hooks, so a
+          # test that runs git in a temp directory would act on this repository unless they are unset first.
+          - name: test
+            glob: "*.{js,mjs,mts,ts,tsx,svelte,json}"
+            run: unset $(git rev-parse --local-env-vars); bun run test
+          # The package tests run on the Mac with no simulator. The first run after a clean .build compiles the package.
+          - name: swift
+            glob: "{Package.swift,Sources/**,Tests/**}"
+            run: unset $(git rev-parse --local-env-vars); swift test
+          - name: spec
+            glob: "spec/*"
+            run: bun scripts/spec.ts

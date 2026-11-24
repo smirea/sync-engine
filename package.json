@@ -1,57 +1,56 @@
 {
-	"name": "sync-engine",
-	"files": [
-		"packages/*/src",
-		"Package.swift",
-		"Sources"
-	],
-	"type": "module",
-	"exports": {
-		"./core": "./packages/core/src/index.ts",
-		"./client": "./packages/client/src/index.ts",
-		"./bun-sqlite": "./packages/bun-sqlite/src/index.ts",
-		"./bun-server": "./packages/bun-server/src/index.ts",
-		"./cloudflare": "./packages/cloudflare/src/index.ts",
-		"./schema": "./packages/schema/src/index.ts",
-		"./client-web": "./packages/client-web/src/index.ts",
-		"./client-web/worker": "./packages/client-web/src/worker.ts"
-	},
-	"scripts": {
-		"postinstall": "lefthook install",
-		"lint": "oxlint --fix && oxfmt",
-		"lint:ci": "oxlint && oxfmt --check",
-		"typecheck": "bun check",
-		"test": "bun test --pass-with-no-tests --path-ignore-patterns 'packages/client-web/**'",
-		"test:web": "bun test --timeout 30000 packages/client-web",
-		"spec": "bun scripts/spec.ts",
-		"build": "bun build packages/core/src/index.ts --target browser --outdir dist",
-		"spec-vectors": "bun scripts/spec-vectors.ts"
-	},
-	"dependencies": {
-		"drizzle-orm": "^0.45.1",
-		"zod": "^4.1.13"
-	},
-	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20251011.0",
-		"@sqlite.org/sqlite-wasm": "3.54.1-build1",
-		"@types/bun": "^1.4.4",
-		"lefthook": "^2.2.2",
-		"oxfmt": "^0.79.0",
-		"oxlint": "^1.94.0",
-		"playwright": "1.65.1",
-		"wrangler": "^4.164.0"
-	},
-	"peerDependencies": {
-		"@cloudflare/workers-types": "^4.20251011.0",
-		"@sqlite.org/sqlite-wasm": "3.54.1-build1"
-	},
-	"peerDependenciesMeta": {
-		"@cloudflare/workers-types": {
-			"optional": true
-		},
-		"@sqlite.org/sqlite-wasm": {
-			"optional": true
-		}
-	},
-	"packageManager": "bun@1.4.4"
+  "name": "sync-engine",
+  "files": [
+    "packages/*/src",
+    "Package.swift",
+    "Sources"
+  ],
+  "type": "module",
+  "exports": {
+    "./core": "./packages/core/src/index.ts",
+    "./client": "./packages/client/src/index.ts",
+    "./bun-sqlite": "./packages/bun-sqlite/src/index.ts",
+    "./bun-server": "./packages/bun-server/src/index.ts",
+    "./cloudflare": "./packages/cloudflare/src/index.ts",
+    "./schema": "./packages/schema/src/index.ts",
+    "./client-web": "./packages/client-web/src/index.ts",
+    "./client-web/worker": "./packages/client-web/src/worker.ts"
+  },
+  "scripts": {
+    "postinstall": "[ ! -d .git ] || lefthook install",
+    "lint": "oxlint --fix",
+    "lint:ci": "oxlint",
+    "typecheck": "bun check",
+    "test": "bun test --pass-with-no-tests --path-ignore-patterns 'packages/client-web/**'",
+    "test:web": "bun test --timeout 30000 packages/client-web",
+    "spec": "bun scripts/spec.ts",
+    "build": "bun build packages/core/src/index.ts --target browser --outdir dist",
+    "spec-vectors": "bun scripts/spec-vectors.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251011.0",
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1",
+    "@types/bun": "^1.4.4",
+    "lefthook": "^2.2.2",
+    "oxlint": "^1.95.0",
+    "playwright": "1.65.1",
+    "wrangler": "^4.164.0"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": "^4.20251011.0",
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    },
+    "@sqlite.org/sqlite-wasm": {
+      "optional": true
+    }
+  },
+  "packageManager": "bun@1.4.4"
 }

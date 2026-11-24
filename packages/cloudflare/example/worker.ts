@@ -1,20 +1,20 @@
-import type { DurableObjectNamespace, DurableObjectState } from '@cloudflare/workers-types';
-import { handleSync, SpaceObject } from '../src/index.ts';
-import { schema } from './schema.ts';
+import type { DurableObjectNamespace, DurableObjectState } from "@cloudflare/workers-types";
+import { handleSync, SpaceObject } from "../src/index.ts";
+import { schema } from "./schema.ts";
 
 type Env = { SPACE: DurableObjectNamespace };
 
 export class Space extends SpaceObject<Env> {
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env, schema);
-	}
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env, schema);
+  }
 }
 
 export default {
-	fetch: (request: Request, env: Env) =>
-		handleSync(request, {
-			namespace: env.SPACE,
-			spaceId: 'demo',
-			authorize: r => r.headers.get('authorization') === 'Bearer dev',
-		}),
+  fetch: (request: Request, env: Env) =>
+    handleSync(request, {
+      namespace: env.SPACE,
+      spaceId: "demo",
+      authorize: (r) => r.headers.get("authorization") === "Bearer dev",
+    }),
 };
