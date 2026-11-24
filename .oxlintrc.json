@@ -1,28 +1,28 @@
 {
-	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	"plugins": ["typescript", "unicorn", "oxc"],
-	"categories": {
-		"correctness": "error"
-	},
-	"env": {
-		"builtin": true
-	},
-	"ignorePatterns": [
-		"node_modules",
-		"dist",
-		"build",
-		"out",
-		".svelte-kit",
-		"**/.svelte-kit",
-		"generated",
-		"**/generated",
-		"**/*.generated.ts",
-		"**/*.gen.ts",
-		".build",
-		".swiftpm",
-		"DerivedData",
-		"**/DerivedData",
-		"spec/vectors.json",
-		"spec/sync.mjs"
-	]
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "build",
+    "out",
+    ".svelte-kit",
+    "**/.svelte-kit",
+    "generated",
+    "**/generated",
+    "**/*.generated.ts",
+    "**/*.gen.ts",
+    ".build",
+    ".swiftpm",
+    "DerivedData",
+    "**/DerivedData",
+    "spec/vectors.json",
+    "spec/sync.mjs"
+  ]
 }

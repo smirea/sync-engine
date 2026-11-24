@@ -96,16 +96,28 @@ Each write carries `seq` = the largest outbox `seq` in its group. A `put` or `pa
 
 ```json
 {
-	"protocol": 2,
-	"client": "4f0a...",
-	"cursor": 42,
-	"writes": [
-		{ "seq": 7, "table": "workout_templates", "id": "a1", "op": "put", "values": { "name": "Push", "archived": 0 } },
-		{ "seq": 9, "table": "settings", "id": "settings", "op": "patch", "values": { "weight_unit": "lb" } },
-		{ "seq": 11, "table": "body_weights", "id": "b7", "op": "delete" }
-	],
-	"after": { "table": "workout_templates", "id": "a1" },
-	"space": "6f1c2d3e-0a4b-4c5d-8e6f-7a8b9c0d1e2f"
+  "protocol": 2,
+  "client": "4f0a...",
+  "cursor": 42,
+  "writes": [
+    {
+      "seq": 7,
+      "table": "workout_templates",
+      "id": "a1",
+      "op": "put",
+      "values": { "name": "Push", "archived": 0 }
+    },
+    {
+      "seq": 9,
+      "table": "settings",
+      "id": "settings",
+      "op": "patch",
+      "values": { "weight_unit": "lb" }
+    },
+    { "seq": 11, "table": "body_weights", "id": "b7", "op": "delete" }
+  ],
+  "after": { "table": "workout_templates", "id": "a1" },
+  "space": "6f1c2d3e-0a4b-4c5d-8e6f-7a8b9c0d1e2f"
 }
 ```
 
@@ -115,12 +127,12 @@ A client with `_meta.refresh` and no snapshot in progress sends that value as `r
 
 ```json
 {
-	"protocol": 2,
-	"client": "4f0a...",
-	"cursor": 42,
-	"writes": [],
-	"space": "6f1c...",
-	"refresh": { "tables": ["tasks", "labels"], "after": { "table": "tasks", "id": "t9" } }
+  "protocol": 2,
+  "client": "4f0a...",
+  "cursor": 42,
+  "writes": [],
+  "space": "6f1c...",
+  "refresh": { "tables": ["tasks", "labels"], "after": { "table": "tasks", "id": "t9" } }
 }
 ```
 
@@ -145,21 +157,23 @@ Conflicts resolve as column-level last write to arrive. A delete beats a later p
 
 ```json
 {
-	"head": 57,
-	"acked": 11,
-	"rejected": [{ "seq": 9, "table": "settings", "id": "settings", "reason": "weight_unit: expected kg or lb" }],
-	"snapshot": false,
-	"rows": [
-		{
-			"table": "workout_templates",
-			"id": "a1",
-			"deleted": 0,
-			"values": { "id": "a1", "name": "Push", "archived": 0, "...": "every column" }
-		},
-		{ "table": "body_weights", "id": "b7", "deleted": 1 }
-	],
-	"next": null,
-	"space": "6f1c2d3e-0a4b-4c5d-8e6f-7a8b9c0d1e2f"
+  "head": 57,
+  "acked": 11,
+  "rejected": [
+    { "seq": 9, "table": "settings", "id": "settings", "reason": "weight_unit: expected kg or lb" }
+  ],
+  "snapshot": false,
+  "rows": [
+    {
+      "table": "workout_templates",
+      "id": "a1",
+      "deleted": 0,
+      "values": { "id": "a1", "name": "Push", "archived": 0, "...": "every column" }
+    },
+    { "table": "body_weights", "id": "b7", "deleted": 1 }
+  ],
+  "next": null,
+  "space": "6f1c2d3e-0a4b-4c5d-8e6f-7a8b9c0d1e2f"
 }
 ```
 
